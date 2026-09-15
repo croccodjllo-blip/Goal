@@ -1,7 +1,7 @@
 {% extends "base.html" %}
-{% block title %}xG · {{ fixture_id }}{% endblock %}
+{% block title %}xG · {{ card.home_name if card else fixture_id }}{% endblock %}
 {% block content %}
-<p class="back"><a href="/">← Live</a></p>
+<p class="back"><a href="/">← Live board</a></p>
 
 {% if error %}
 <div class="alert">{{ error }}</div>
@@ -9,20 +9,52 @@
 
 {% if card %}
 <header class="fixture-head">
-  <p class="league">{{ card.league_name }}</p>
-  <h1>{{ card.home_name }} <span class="score">{{ card.score_home if card.score_home is not none else "–" }}-{{ card.score_away if card.score_away is not none else "–" }}</span> {{ card.away_name }}</h1>
-  <p class="meta">{% if card.minute is not none %}{{ card.minute }}′{% endif %} {% if card.period %}· {{ card.period }}{% endif %}</p>
+  <p class="league">{{ card.league_name or "Big-5" }}</p>
+  <div class="match-scoreboard">
+    <div class="side home">
+      <p class="name">{{ card.home_name }}</p>
+    </div>
+    <div class="center">
+      <div class="score">
+        {{ card.score_home if card.score_home is not none else "–" }}-{{ card.score_away if card.score_away is not none else "–" }}
+      </div>
+      <div class="clock">
+        {% if card.minute is not none %}
+        <span class="live-pill">Live</span>
+        <span>{{ card.minute }}′</span>
+        {% else %}
+        <span>—</span>
+        {% endif %}
+        {% if card.period %}<span class="muted">· {{ card.period }}</span>{% endif %}
+      </div>
+    </div>
+    <div class="side away">
+      <p class="name">{{ card.away_name }}</p>
+    </div>
+  </div>
 </header>
 {% else %}
-<h1>Fixture {{ fixture_id }}</h1>
+<header class="fixture-head">
+  <h1 style="margin:0;font-size:1.1rem;">Fixture {{ fixture_id }}</h1>
+</header>
 {% endif %}
 
 {% if score %}
 <section class="xg-panel">
-  <div class="xg-num {% if score.settled %}settled{% endif %}">{{ score.xg_score }}</div>
+  {% set xg = score.xg_score if score.xg_score is not none else 0 %}
+  {% set ring_color = 'var(--xg-ring)' if xg >= 60 else ('var(--xg-mid)' if xg >= 40 else 'var(--xg-low)') %}
+  <div
+    class="xg-ring"
+    style="--pct: {{ xg }}; --ring-color: {{ ring_color }};"
+    role="img"
+    aria-label="Indice xG {{ xg }} su 100"
+  >
+    <div class="xg-num{% if score.settled %} settled{% endif %}">{{ score.xg_score }}</div>
+  </div>
   <p class="xg-label">xG prodotto · {{ band }}</p>
-  <p class="muted">
+  <p class="xg-sub">
     p(Over 0.5 FT) ≈ {{ '%.0f'|format(score.p_over05_ft * 100) }}%
+    {% if score.in_window %} · finestra 28–32′{% endif %}
     {% if score.settled %} · settled{% endif %}
     {% if score.skipped %} · skipped: {{ score.skip_reason }}{% endif %}
   </p>
@@ -32,7 +64,21 @@
   </ul>
   {% endif %}
 </section>
+
+{% if feature_rows %}
+<section class="features">
+  <h2>Breakdown live @30′</h2>
+  <dl>
+    {% for row in feature_rows %}
+    <div class="feat-row">
+      <dt>{{ row.label }}</dt>
+      <dd>{{ row.value }}</dd>
+    </div>
+    {% endfor %}
+  </dl>
+</section>
+{% endif %}
 {% endif %}
 
-<p class="muted"><a href="/api/live30/{{ fixture_id }}">JSON API</a></p>
+<p class="api-link muted"><a href="/api/live30/{{ fixture_id }}">JSON API</a></p>
 {% endblock %}

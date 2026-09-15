@@ -36,6 +36,8 @@ def test_index_without_key_shows_alert(monkeypatch) -> None:
     assert "text/html" in resp.headers["content-type"]
     assert "GOAL_API_KEY" in resp.text
     assert "Live Big-5" in resp.text
+    assert "league-group" in resp.text or "match-list" in resp.text or "empty" in resp.text
+    assert "Goal" in resp.text and "xG" in resp.text
 
 
 def test_api_live_fail_closed_without_key(monkeypatch) -> None:
@@ -50,4 +52,16 @@ def test_static_css(monkeypatch) -> None:
     client = TestClient(create_app())
     resp = client.get("/static/app.css")
     assert resp.status_code == 200
-    assert "Goal" in resp.text or "--bg" in resp.text
+    assert "--bg" in resp.text
+    assert ".match-row" in resp.text
+    assert ".live-pill" in resp.text
+    assert ".xg-ring" in resp.text
+
+
+def test_fixture_without_key(monkeypatch) -> None:
+    monkeypatch.delenv("GOAL_API_KEY", raising=False)
+    client = TestClient(create_app())
+    resp = client.get("/fixtures/123")
+    assert resp.status_code == 200
+    assert "GOAL_API_KEY" in resp.text
+    assert "xg-panel" not in resp.text or "mancante" in resp.text

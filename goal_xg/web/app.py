@@ -112,6 +112,67 @@ def _row_card(row: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+_FEATURE_LABELS: dict[str, str] = {
+    "sot_total": "Tiri in porta",
+    "attacks_total": "Attacchi",
+    "corners_total": "Calci d'angolo",
+    "possession_home": "Possesso casa %",
+    "saves_total": "Parate",
+    "def_yellows_total": "Ammonizioni dif.",
+    "subs_total": "Sostituzioni",
+    "source_half": "Fonte stats",
+    "formation_home": "Modulo casa",
+    "formation_away": "Modulo trasferta",
+    "settled": "Settled",
+}
+
+_SIGNAL_LABELS: dict[str, str] = {
+    "pace": "Ritmo",
+    "pressure": "Pressione",
+    "set_pieces": "Palle inattive",
+    "goalkeeper": "Portiere",
+    "discipline": "Disciplina",
+    "subs": "Cambi",
+    "prematch": "Prior pre-match",
+}
+
+
+def _group_by_league(cards: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Preserve first-seen league order (SofaScore tournament blocks)."""
+    order: list[str] = []
+    buckets: dict[str, list[dict[str, Any]]] = {}
+    for card in cards:
+        name = str(card.get("league_name") or "").strip() or "Big-5"
+        if name not in buckets:
+            buckets[name] = []
+            order.append(name)
+        buckets[name].append(card)
+    return [{"league_name": name, "matches": buckets[name]} for name in order]
+
+
+def _feature_rows(score: dict[str, Any] | None) -> list[dict[str, str]]:
+    if not score:
+        return []
+    rows: list[dict[str, str]] = []
+    features = score.get("features") if isinstance(score.get("features"), dict) else {}
+    signals = score.get("signals") if isinstance(score.get("signals"), dict) else {}
+    for key, raw in features.items():
+        if raw is None or raw == "":
+            continue
+        label = _FEATURE_LABELS.get(str(key), str(key).replace("_", " "))
+        rows.append({"label": label, "value": str(raw)})
+    for key, raw in signals.items():
+        if raw is None:
+            continue
+        label = _SIGNAL_LABELS.get(str(key), str(key).replace("_", " "))
+        try:
+            val = f"{float(raw):.2f}"
+        except (TypeError, ValueError):
+            val = str(raw)
+        rows.append({"label": f"Segnale · {label}", "value": val})
+    return rows
+
+
 def create_app() -> FastAPI:
     app = FastAPI(title="Goal xG", version="0.3.0", docs_url="/docs")
     app.mount("/static", StaticFiles(directory=str(_WEB_DIR / "static")), name="static")
@@ -159,6 +220,7 @@ def create_app() -> FastAPI:
             {
                 "error": error,
                 "live_cards": live_cards,
+                "league_groups": _group_by_league(live_cards),
                 "candidates": candidates,
                 "refresh_seconds": 30,
             },
@@ -178,6 +240,7 @@ def create_app() -> FastAPI:
                     "card": None,
                     "score": None,
                     "band": None,
+                    "feature_rows": [],
                 },
             )
         error: str | None = None
@@ -214,6 +277,7 @@ def create_app() -> FastAPI:
                 "card": card,
                 "score": score_dict,
                 "band": _xg_band(int(xg) if xg is not None else None),
+                "feature_rows": _feature_rows(score_dict),
             },
         )
 

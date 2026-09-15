@@ -1,56 +1,85 @@
 {% extends "base.html" %}
 {% block title %}Goal xG — Live{% endblock %}
 {% block content %}
-<section class="hero">
+<header class="board-head">
   <h1>Live Big-5</h1>
-  <p>Priorità: ancora <strong>0-0</strong> tra il 28′ e il 32′ → score <strong>xG</strong>.</p>
-</section>
+  <p>Board live · priorità 0-0 tra 28′ e 32′ → indice prodotto xG.</p>
+</header>
 
 {% if error %}
 <div class="alert">{{ error }}</div>
 {% endif %}
 
-<section class="panel">
-  <h2>Candidati live @30′ (0-0)</h2>
-  {% if candidates %}
-  <ul class="cards">
+{% if candidates %}
+<p class="section-label"><span class="window-pill">Finestra</span> Candidati @30′ (0-0)</p>
+<div class="league-group">
+  <ul class="match-list">
     {% for c in candidates %}
-    <li class="card hot">
-      <a href="/fixtures/{{ c.fixture_id }}">
-        <span class="league">{{ c.league_name or "Big-5" }}</span>
-        <span class="match">{{ c.home_name }} – {{ c.away_name }}</span>
-        <span class="meta">{{ c.minute or "?" }}′ · {{ c.score_home }}-{{ c.score_away }}</span>
-      </a>
-    </li>
-    {% endfor %}
-  </ul>
-  {% else %}
-  <p class="muted">Nessun candidato in finestra adesso.</p>
-  {% endif %}
-</section>
-
-<section class="panel">
-  <h2>Tutte le live Big-5</h2>
-  {% if live_cards %}
-  <ul class="cards">
-    {% for c in live_cards %}
-    <li class="card {% if c.is_live30_candidate %}hot{% endif %}">
-      <a href="/fixtures/{{ c.fixture_id }}">
-        <span class="league">{{ c.league_name or "" }}</span>
-        <span class="match">{{ c.home_name }} – {{ c.away_name }}</span>
-        <span class="meta">
-          {% if c.minute is not none %}{{ c.minute }}′{% else %}—{% endif %}
-          ·
-          {% if c.score_home is not none %}{{ c.score_home }}-{{ c.score_away }}{% else %}?{% endif %}
-          {% if c.is_00 %} · 0-0{% endif %}
-          {% if c.in_window %} · finestra{% endif %}
+    <li class="match-row hot">
+      <a class="match-link" href="/fixtures/{{ c.fixture_id }}">
+        <span class="minute-badge">{{ c.minute or "?" }}′</span>
+        <span class="teams">
+          <span class="team-name">{{ c.home_name }}</span>
+          <span class="team-name">{{ c.away_name }}</span>
+        </span>
+        <span class="score-col">
+          <span>{{ c.score_home if c.score_home is not none else "–" }}</span>
+          <span>{{ c.score_away if c.score_away is not none else "–" }}</span>
+        </span>
+        <span class="status-col">
+          <span class="live-pill">Live</span>
+          <span class="window-pill">28–32′</span>
         </span>
       </a>
     </li>
     {% endfor %}
   </ul>
-  {% else %}
-  <p class="muted">Nessuna partita live Big-5 (o API non raggiungibile).</p>
-  {% endif %}
-</section>
+</div>
+{% endif %}
+
+<p class="section-label"><span class="live-pill">Live</span> Tutte le partite Big-5</p>
+
+{% if league_groups %}
+  {% for group in league_groups %}
+  <section class="league-group">
+    <div class="league-header">
+      <span class="league-dot" aria-hidden="true"></span>
+      {{ group.league_name }}
+    </div>
+    <ul class="match-list">
+      {% for c in group.matches %}
+      <li class="match-row{% if c.is_live30_candidate %} hot{% endif %}">
+        <a class="match-link" href="/fixtures/{{ c.fixture_id }}">
+          <span class="minute-badge{% if c.minute is none %} is-waiting{% endif %}">
+            {% if c.minute is not none %}{{ c.minute }}′{% else %}—{% endif %}
+          </span>
+          <span class="teams">
+            <span class="team-name">{{ c.home_name }}</span>
+            <span class="team-name">{{ c.away_name }}</span>
+          </span>
+          <span class="score-col">
+            <span>{{ c.score_home if c.score_home is not none else "–" }}</span>
+            <span>{{ c.score_away if c.score_away is not none else "–" }}</span>
+          </span>
+          <span class="status-col">
+            {% if c.minute is not none %}
+            <span class="live-pill">Live</span>
+            {% else %}
+            <span class="xg-badge">…</span>
+            {% endif %}
+            {% if c.in_window and c.is_00 %}
+            <span class="window-pill">@30′</span>
+            {% elif c.is_00 %}
+            <span class="xg-badge">0-0</span>
+            {% endif %}
+          </span>
+        </a>
+      </li>
+      {% endfor %}
+    </ul>
+  </section>
+  {% endfor %}
+{% else %}
+<p class="empty">Nessuna partita live Big-5 (o API non raggiungibile).</p>
+{% endif %}
 {% endblock %}
