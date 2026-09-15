@@ -12,7 +12,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from goal_xg.clients.goal_api import GoalApiClient, GoalApiError
+from goal_xg.clients.goal_api import GoalApiClient, GoalApiError, _as_league_id
 from goal_xg.live30.service import (
     list_live30_candidates,
     live30_score_to_dict,
@@ -74,12 +74,11 @@ def _big5_filter(client: GoalApiClient, rows: list[dict[str, Any]]) -> list[dict
     out: list[dict[str, Any]] = []
     for row in rows:
         league = row.get("league") if isinstance(row.get("league"), dict) else {}
-        lid = league.get("id") or row.get("leagueId") or row.get("league_id")
-        try:
-            if lid is not None and int(lid) in ids:
-                out.append(row)
-        except (TypeError, ValueError):
-            continue
+        lid = _as_league_id(
+            league.get("id") or row.get("leagueId") or row.get("league_id")
+        )
+        if lid is not None and lid in ids:
+            out.append(row)
     return out
 
 

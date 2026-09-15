@@ -240,6 +240,7 @@ def parse_match_update(payload: Mapping[str, Any]) -> LiveMatchState | None:
         _first_present(
             data,
             "match_hometeam_score",
+            "homeTeamScore",
             "homeScore",
             "home_score",
             "score_home",
@@ -249,6 +250,7 @@ def parse_match_update(payload: Mapping[str, Any]) -> LiveMatchState | None:
         _first_present(
             data,
             "match_awayteam_score",
+            "awayTeamScore",
             "awayScore",
             "away_score",
             "score_away",

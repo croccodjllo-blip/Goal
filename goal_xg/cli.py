@@ -13,7 +13,7 @@ import typer
 from dotenv import load_dotenv
 
 from goal_xg.clients.football_data import FootballDataClient, FootballDataError
-from goal_xg.clients.goal_api import GoalApiClient, GoalApiError
+from goal_xg.clients.goal_api import GoalApiClient, GoalApiError, _as_league_id
 from goal_xg.clients.goal_ws import GoalWsClient
 from goal_xg.features.prematch import FinishedFixture, compute_prematch_priors
 from goal_xg.live30.service import (
@@ -50,7 +50,7 @@ def _dump(obj: Any) -> None:
     typer.echo(json.dumps(obj, indent=2, default=str))
 
 
-def _extract_fixture_teams_scores(payload: Any) -> tuple[int, int, list[FinishedFixture]]:
+def _extract_fixture_teams_scores(payload: Any) -> tuple[int | str, int | str, list[FinishedFixture]]:
     """Best-effort parse of a fixture detail + related finished list if present."""
     data = payload
     if isinstance(payload, dict):
@@ -71,7 +71,7 @@ def _extract_fixture_teams_scores(payload: Any) -> tuple[int, int, list[Finished
     if hid is None or aid is None:
         raise GoalApiError("Could not resolve home/away team ids from fixture")
 
-    return int(hid), int(aid), []
+    return str(hid), str(aid), []
 
 
 def _normalize_fixtures_list(payload: Any) -> list[dict[str, Any]]:
@@ -138,15 +138,15 @@ def fixtures_cmd(
             payload = client.fixtures_by_date(date)
             rows = _normalize_fixtures_list(payload)
 
-            def _league_id(row: dict[str, Any]) -> int | None:
+            def _league_id(row: dict[str, Any]) -> str | None:
                 league = row.get("league")
                 if isinstance(league, dict) and league.get("id") is not None:
-                    return int(league["id"])
-                if row.get("league_id") is not None:
-                    return int(row["league_id"])
-                if row.get("leagueId") is not None:
-                    return int(row["leagueId"])
-                return None
+                    return _as_league_id(league["id"])
+                return _as_league_id(
+                    row.get("league_id")
+                    if row.get("league_id") is not None
+                    else row.get("leagueId")
+                )
 
             if big5_only and big5_ids:
                 rows = [r for r in rows if _league_id(r) in big5_ids]
@@ -195,13 +195,17 @@ def score_prematch_cmd(
                         fixture_row = val[0]
                         break
 
-            league_id: int | None = None
+            league_id: str | None = None
             if isinstance(fixture_row, dict):
                 league = fixture_row.get("league")
                 if isinstance(league, dict) and league.get("id") is not None:
-                    league_id = int(league["id"])
-                elif fixture_row.get("league_id") is not None:
-                    league_id = int(fixture_row["league_id"])
+                    league_id = _as_league_id(league["id"])
+                else:
+                    league_id = _as_league_id(
+                        fixture_row.get("league_id")
+                        if fixture_row.get("league_id") is not None
+                        else fixture_row.get("leagueId")
+                    )
 
             finished_raw: list[Any] = []
             if league_id is not None:
@@ -305,11 +309,10 @@ def watch_live_cmd(
             match_ids: list[str] = []
             for row in _normalize_fixtures_list(live_payload):
                 league = row.get("league") if isinstance(row.get("league"), dict) else {}
-                lid = league.get("id") or row.get("leagueId")
-                try:
-                    if lid is None or int(lid) not in big5_ids:
-                        continue
-                except (TypeError, ValueError):
+                lid = _as_league_id(
+                    league.get("id") or row.get("leagueId") or row.get("league_id")
+                )
+                if lid is None or lid not in big5_ids:
                     continue
                 state = live_row_to_state(row)
                 if state and state.fixture_id:

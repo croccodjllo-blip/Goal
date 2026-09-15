@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Any, Mapping
 
-from goal_xg.clients.goal_api import GoalApiClient
+from goal_xg.clients.goal_api import GoalApiClient, _as_league_id
 from goal_xg.clients.goal_ws import LiveMatchState, parse_match_update
 from goal_xg.features.prematch import PrematchPriors, compute_prematch_priors
 from goal_xg.live30.score import Live30Score, score_live30
@@ -75,7 +75,13 @@ def live_row_to_state(row: Mapping[str, Any]) -> LiveMatchState | None:
     goals = row.get("goals") if isinstance(row.get("goals"), dict) else {}
     score = row.get("score") if isinstance(row.get("score"), dict) else {}
     home = None
-    for key in ("homeScore", "home_score", "score_home"):
+    for key in (
+        "homeTeamScore",
+        "homeScore",
+        "home_score",
+        "score_home",
+        "match_hometeam_score",
+    ):
         if key in row and row[key] is not None and row[key] != "":
             home = row[key]
             break
@@ -84,7 +90,13 @@ def live_row_to_state(row: Mapping[str, Any]) -> LiveMatchState | None:
     if home is None and isinstance(score.get("fulltime"), dict):
         home = score["fulltime"].get("home")
     away = None
-    for key in ("awayScore", "away_score", "score_away"):
+    for key in (
+        "awayTeamScore",
+        "awayScore",
+        "away_score",
+        "score_away",
+        "match_awayteam_score",
+    ):
         if key in row and row[key] is not None and row[key] != "":
             away = row[key]
             break
@@ -119,8 +131,8 @@ def live_row_to_state(row: Mapping[str, Any]) -> LiveMatchState | None:
         status_raw=str(row.get("matchStatus") or row.get("status") or "") or None,
         home_name=home_t.get("name") or row.get("homeTeamName"),
         away_name=away_t.get("name") or row.get("awayTeamName"),
-        league_name=league.get("name") or row.get("league_name"),
-        country_name=row.get("country_name"),
+        league_name=league.get("name") or row.get("leagueName") or row.get("league_name"),
+        country_name=row.get("countryName") or row.get("country_name"),
         raw=dict(row),
     )
 
@@ -137,7 +149,7 @@ def list_live30_candidates(
     Does **not** fetch statistics (budget). Use :func:`score_fixture_live30`
     per candidate when ready to densify.
     """
-    big5_ids: set[int] = set()
+    big5_ids: set[str] = set()
     if big5_only:
         big5_ids = {lg.league_id for lg in client.discover_big5_leagues()}
 
@@ -147,11 +159,10 @@ def list_live30_candidates(
     for row in rows:
         if big5_only and big5_ids:
             league = row.get("league") if isinstance(row.get("league"), dict) else {}
-            lid = league.get("id") or row.get("leagueId") or row.get("league_id")
-            try:
-                if lid is None or int(lid) not in big5_ids:
-                    continue
-            except (TypeError, ValueError):
+            lid = _as_league_id(
+                league.get("id") or row.get("leagueId") or row.get("league_id")
+            )
+            if lid is None or lid not in big5_ids:
                 continue
         state = live_row_to_state(row)
         if state is None or state.fixture_id is None:
@@ -178,16 +189,16 @@ def list_live30_candidates(
     return out
 
 
-def _extract_team_ids(fixture_row: Mapping[str, Any]) -> tuple[int | None, int | None]:
+def _extract_team_ids(fixture_row: Mapping[str, Any]) -> tuple[str | None, str | None]:
     teams = fixture_row.get("teams") if isinstance(fixture_row.get("teams"), dict) else {}
     home = teams.get("home") if isinstance(teams.get("home"), dict) else {}
     away = teams.get("away") if isinstance(teams.get("away"), dict) else {}
     hid = home.get("id") or fixture_row.get("homeTeamId") or fixture_row.get("home_team_id")
     aid = away.get("id") or fixture_row.get("awayTeamId") or fixture_row.get("away_team_id")
-    try:
-        return (int(hid) if hid is not None else None, int(aid) if aid is not None else None)
-    except (TypeError, ValueError):
-        return None, None
+    return (
+        str(hid).strip() if hid is not None and str(hid).strip() else None,
+        str(aid).strip() if aid is not None and str(aid).strip() else None,
+    )
 
 
 def score_fixture_live30(
@@ -297,7 +308,7 @@ def score_fixture_live30(
         league_id = league.get("id") or fixture_row.get("leagueId")
         if hid is not None and aid is not None and league_id is not None:
             try:
-                hist = client.fixtures_by_league(int(league_id), season=season, status="FT")
+                hist = client.fixtures_by_league(league_id, season=season, status="FT")
                 priors = compute_prematch_priors(
                     home_team_id=hid,
                     away_team_id=aid,

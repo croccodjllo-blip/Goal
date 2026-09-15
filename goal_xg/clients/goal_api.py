@@ -58,10 +58,18 @@ class RateLimitInfo:
 @dataclass
 class Big5League:
     code: str
-    league_id: int
+    # GOAL API uses opaque string CUIDs (not numeric provider ids).
+    league_id: str
     name: str
     country: str
     season: int | None = None
+
+
+def _as_league_id(value: Any) -> str | None:
+    """Normalize a league id to a comparable string (CUID or numeric)."""
+    if value is None or value == "":
+        return None
+    return str(value).strip()
 
 
 class GoalApiError(RuntimeError):
@@ -181,13 +189,22 @@ class GoalApiClient:
             return None
         out: list[Big5League] = []
         for row in data.get("leagues", []):
+            lid = _as_league_id(row.get("league_id"))
+            if lid is None:
+                continue
+            season = row.get("season")
+            if season is not None and not isinstance(season, int):
+                try:
+                    season = int(str(season).split("/")[0])
+                except (TypeError, ValueError):
+                    season = None
             out.append(
                 Big5League(
                     code=str(row["code"]),
-                    league_id=int(row["league_id"]),
+                    league_id=lid,
                     name=str(row["name"]),
                     country=str(row.get("country", "")),
-                    season=row.get("season"),
+                    season=season,
                 )
             )
         return out or None
@@ -253,13 +270,31 @@ class GoalApiClient:
                             season = int(year)
                         except (TypeError, ValueError):
                             season = None
-            lid = league.get("id") or league.get("league_id") or row.get("id")
+            lid = _as_league_id(
+                league.get("id") or league.get("league_id") or row.get("id")
+            )
             name = league.get("name") or row.get("name")
             if lid is None or not name:
                 continue
+            # Prefer nested country name; fall back to flat countryName.
+            if not country:
+                country = str(
+                    row.get("countryName")
+                    or league.get("countryName")
+                    or league.get("country")
+                    or ""
+                )
+            # Top-level season may be "2026/2027" when seasons[] is absent.
+            if season is None:
+                raw_season = league.get("season") or row.get("season")
+                if raw_season is not None:
+                    try:
+                        season = int(str(raw_season).split("/")[0])
+                    except (TypeError, ValueError):
+                        season = None
             flat.append(
                 {
-                    "id": int(lid),
+                    "id": lid,
                     "name": str(name),
                     "country": country,
                     "season": season,
@@ -302,9 +337,12 @@ class GoalApiClient:
             code = self._match_big5(row)
             if code is None or code in found:
                 continue
+            lid = _as_league_id(row.get("id"))
+            if lid is None:
+                continue
             found[code] = Big5League(
                 code=code,
-                league_id=int(row["id"]),
+                league_id=lid,
                 name=str(row["name"]),
                 country=str(row.get("country", "")),
                 season=row.get("season"),
@@ -322,7 +360,7 @@ class GoalApiClient:
 
     # --- Convenience endpoints (Phase A) ---------------------------------
 
-    def fixtures_by_date(self, date: str, *, league_id: int | None = None) -> Any:
+    def fixtures_by_date(self, date: str, *, league_id: int | str | None = None) -> Any:
         """Fetch fixtures for YYYY-MM-DD; optionally filter by league id client-side later."""
         params: dict[str, Any] = {"date": date}
         if league_id is not None:
@@ -335,7 +373,7 @@ class GoalApiClient:
 
     def fixtures_by_league(
         self,
-        league_id: int,
+        league_id: int | str,
         *,
         season: int | None = None,
         status: str | None = "FT",
@@ -349,7 +387,7 @@ class GoalApiClient:
 
     # --- Live / densified REST (Phase B — use sparingly; prefer WS) --------
 
-    def fixtures_live(self, *, league_id: int | None = None) -> Any:
+    def fixtures_live(self, *, league_id: int | str | None = None) -> Any:
         """``GET /fixtures/live`` — in-play fixtures (one REST hit for candidate list)."""
         params: dict[str, Any] = {}
         if league_id is not None:

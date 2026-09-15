@@ -15,16 +15,16 @@ Side = Literal["home", "away"]
 class FinishedFixture:
     """Minimal FT result row used for prior estimation."""
 
-    home_team_id: int
-    away_team_id: int
+    home_team_id: int | str
+    away_team_id: int | str
     goals_home: int
     goals_away: int
-    league_id: int | None = None
+    league_id: int | str | None = None
 
 
 @dataclass(frozen=True)
 class TeamSideStats:
-    team_id: int
+    team_id: int | str
     side: Side
     n: int
     pct_over05: float
@@ -37,8 +37,8 @@ class TeamSideStats:
 @dataclass(frozen=True)
 class PrematchPriors:
     fixture_id: int | str | None
-    home_team_id: int
-    away_team_id: int
+    home_team_id: int | str
+    away_team_id: int | str
     home_pct_over05: float
     away_pct_over05: float
     home_fts: float
@@ -82,21 +82,31 @@ def _as_finished(rows: Iterable[Any]) -> list[FinishedFixture]:
         if hid is None or aid is None or gh is None or ga is None:
             continue
         try:
-            out.append(
-                FinishedFixture(
-                    home_team_id=int(hid),
-                    away_team_id=int(aid),
-                    goals_home=int(gh),
-                    goals_away=int(ga),
-                    league_id=(
-                        int(row["league_id"])
-                        if row.get("league_id") is not None
-                        else None
-                    ),
-                )
-            )
+            goals_home = int(gh)
+            goals_away = int(ga)
         except (TypeError, ValueError):
             continue
+        league_raw = row.get("league_id") or row.get("leagueId")
+        if league_raw is None:
+            league_obj = row.get("league") if isinstance(row.get("league"), dict) else {}
+            league_raw = league_obj.get("id")
+        out.append(
+            FinishedFixture(
+                home_team_id=hid if isinstance(hid, int) else str(hid),
+                away_team_id=aid if isinstance(aid, int) else str(aid),
+                goals_home=goals_home,
+                goals_away=goals_away,
+                league_id=(
+                    None
+                    if league_raw is None
+                    else (
+                        league_raw
+                        if isinstance(league_raw, int)
+                        else str(league_raw)
+                    )
+                ),
+            )
+        )
     return out
 
 
@@ -113,7 +123,7 @@ def league_over05_rate(fixtures: Sequence[FinishedFixture]) -> tuple[float, floa
 
 def team_side_stats(
     fixtures: Sequence[FinishedFixture],
-    team_id: int,
+    team_id: int | str,
     side: Side,
 ) -> TeamSideStats:
     rows: list[tuple[int, int]] = []  # (gf, ga)
@@ -165,8 +175,8 @@ def shrink_rate(raw: float, league: float, n: int, *, k: float = 8.0) -> float:
 
 def compute_prematch_priors(
     *,
-    home_team_id: int,
-    away_team_id: int,
+    home_team_id: int | str,
+    away_team_id: int | str,
     finished: Sequence[Any],
     fixture_id: int | str | None = None,
     shrink_k: float = 8.0,
