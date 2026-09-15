@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}xG · {{ fixture_id }}{% endblock %}
+{% block content %}
+<p class="back"><a href="/">← Live</a></p>
+
+{% if error %}
+<div class="alert">{{ error }}</div>
+{% endif %}
+
+{% if card %}
+<header class="fixture-head">
+  <p class="league">{{ card.league_name }}</p>
+  <h1>{{ card.home_name }} <span class="score">{{ card.score_home if card.score_home is not none else "–" }}-{{ card.score_away if card.score_away is not none else "–" }}</span> {{ card.away_name }}</h1>
+  <p class="meta">{% if card.minute is not none %}{{ card.minute }}′{% endif %} {% if card.period %}· {{ card.period }}{% endif %}</p>
+</header>
+{% else %}
+<h1>Fixture {{ fixture_id }}</h1>
+{% endif %}
+
+{% if score %}
+<section class="xg-panel">
+  <div class="xg-num {% if score.settled %}settled{% endif %}">{{ score.xg_score }}</div>
+  <p class="xg-label">xG prodotto · {{ band }}</p>
+  <p class="muted">
+    p(Over 0.5 FT) ≈ {{ '%.0f'|format(score.p_over05_ft * 100) }}%
+    {% if score.settled %} · settled{% endif %}
+    {% if score.skipped %} · skipped: {{ score.skip_reason }}{% endif %}
+  </p>
+  {% if score.notes %}
+  <ul class="notes">
+    {% for n in score.notes %}<li>{{ n }}</li>{% endfor %}
+  </ul>
+  {% endif %}
+</section>
+{% endif %}
+
+<p class="muted"><a href="/api/live30/{{ fixture_id }}">JSON API</a></p>
+{% endblock %}
