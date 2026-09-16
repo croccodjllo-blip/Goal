@@ -1,4 +1,4 @@
-"""Score product xG for live 0-0 @ ≈30′ 1H."""
+"""Score product xG for live 0-0 @ ≈30′ 1H — shot-stats ensemble only."""
 
 from __future__ import annotations
 
@@ -8,7 +8,6 @@ from typing import Any, Mapping
 from goal_xg.features.prematch import PrematchPriors
 from goal_xg.live30.stats import (
     LiveVolumeStats,
-    formation_shift_label,
     merge_events_into_stats,
     parse_statistics_payload,
 )
@@ -21,10 +20,10 @@ from goal_xg.live30.window import (
     normalize_period,
     parse_minute,
 )
-from goal_xg.model.calibration import DEFAULT_P_OVER05_GIVEN_00_AT_30
 from goal_xg.model.dynamic_weights import apply_event_shifts, event_shift_deltas
 from goal_xg.model.over05 import xg_score_from_p
-from goal_xg.model.weights import MVP_OMIT_TERMS, omit_and_renorm
+from goal_xg.model.weights import BASE_WEIGHTS, omit_and_renorm
+
 
 @dataclass(frozen=True)
 class Live30Snapshot:
@@ -79,143 +78,73 @@ def _clamp01(x: float) -> float:
 
 
 def _signal_count(total: float | None, *, mid: float, high: float) -> float | None:
-    """Map a non-negative count to [0,1] with mid≈neutral-ish for 0-0@30′."""
+    """Map a non-negative count to [0,1] with mid≈neutral for 0-0@30′."""
     if total is None:
         return None
     t = max(0.0, float(total))
     if t <= 0:
-        return 0.32  # sterile volume → mild down vs residual baseline
+        return 0.28  # sterile → mild down
     if t >= high:
-        return 0.88
+        return 0.90
     if t <= mid:
-        return 0.32 + (0.55 - 0.32) * (t / mid)
-    return 0.55 + (0.88 - 0.55) * min(1.0, (t - mid) / (high - mid))
+        return 0.28 + (0.55 - 0.28) * (t / mid)
+    return 0.55 + (0.90 - 0.55) * min(1.0, (t - mid) / (high - mid))
 
 
-def _signal_possession(home_pct: float | None) -> float | None:
-    if home_pct is None:
-        return None
-    # Possession alone is weak; near 50 → slight lift if not extreme dominance without volume.
-    p = float(home_pct)
-    if p > 1.5:  # already percent
-        p = p
-    elif p <= 1.0:
-        p = p * 100.0
-    # Distance from 50: mild U-shape inverted — balanced slightly preferred for goal chance
-    # when still 0-0; extreme possession without conversion slightly lower.
-    bal = 1.0 - min(1.0, abs(p - 50.0) / 35.0)
-    return _clamp01(0.42 + 0.20 * bal)
-
-
-def _signal_saves(saves: float | None, sot: float | None) -> float | None:
-    if saves is None:
-        return None
-    base = _signal_count(saves, mid=2.0, high=5.0)
-    if base is None:
-        return None
-    if sot is not None and sot >= 2 and saves >= 2:
-        return _clamp01(base + 0.08)  # pressure without breakthrough
-    return base
-
-
-def _signal_def_yellows(total: float | None) -> float | None:
+def _signal_xg_sum(total: float | None, *, mid: float, high: float) -> float | None:
+    """Map cumulative classic xG / xGOT (already probability-ish) to [0,1]."""
     if total is None:
         return None
-    t = float(total)
+    t = max(0.0, float(total))
     if t <= 0:
-        return 0.48
-    return _clamp01(0.52 + 0.08 * min(3.0, t))
-
-
-def _signal_subs(stats: LiveVolumeStats) -> float | None:
-    if stats.subs_total is None and not (
-        stats.formation_home_ko or stats.formation_home_now
-    ):
-        return None
-    shift = formation_shift_label(stats)
-    subs = stats.subs_total if stats.subs_total is not None else 0
-    if shift == "defensive":
-        return 0.40  # early defensive change → slight ↑ 0-0 risk → ↓ xG
-    if shift == "offensive":
-        return 0.62
-    if subs == 0:
-        return 0.50  # neutral
-    return 0.52
-
-
-def _residual_time_signal(
-    priors: PrematchPriors | None,
-    *,
-    league_p_over05_given_00: float | None = None,
-) -> float:
-    """P(Over 0.5 FT | 0-0 @ 30′) backbone — league calib or default."""
-    base = (
-        float(league_p_over05_given_00)
-        if league_p_over05_given_00 is not None
-        else DEFAULT_P_OVER05_GIVEN_00_AT_30
-    )
-    if priors is None:
-        return _clamp01(base)
-    # Shrink toward team prior (already Over 0.5 from KO), dampened for 0-0 condition.
-    prior = _clamp01(priors.p_over05_prior)
-    # Conditioning on still 0-0 lowers unconditional prior slightly.
-    conditioned_prior = _clamp01(0.55 * prior + 0.45 * base)
-    # More history → trust conditioned_prior / base blend via shrinkage.
-    w = _clamp01(priors.shrinkage)
-    return _clamp01((1.0 - w) * base + w * conditioned_prior)
+        return 0.30
+    if t >= high:
+        return 0.92
+    if t <= mid:
+        return 0.30 + (0.58 - 0.30) * (t / mid)
+    return 0.58 + (0.92 - 0.58) * min(1.0, (t - mid) / (high - mid))
 
 
 def build_live_signals(
     stats: LiveVolumeStats,
-    priors: PrematchPriors | None,
+    priors: PrematchPriors | None = None,
     *,
     extra_signals: Mapping[str, float] | None = None,
     league_p_over05_given_00: float | None = None,
     weather_signal: float | None = None,
 ) -> dict[str, float]:
-    """Build [0,1] ensemble signals; omit missing keys (caller renorms)."""
-    signals: dict[str, float] = {
-        "residual_time": _residual_time_signal(
-            priors, league_p_over05_given_00=league_p_over05_given_00
+    """Build [0,1] signals for the nine shot criteria only; omit missing."""
+    # Prematch/weather/league prior are not weighted index criteria.
+    _ = (priors, league_p_over05_given_00, weather_signal)
+
+    signals: dict[str, float] = {}
+    mapping: list[tuple[str, float | None]] = [
+        ("shots_total", _signal_count(stats.shots_total, mid=5.0, high=12.0)),
+        ("sot", _signal_count(stats.sot_total, mid=2.0, high=5.0)),
+        ("shot_xg", _signal_xg_sum(stats.shot_xg_total, mid=0.45, high=1.20)),
+        ("xgot", _signal_xg_sum(stats.xgot_total, mid=0.30, high=0.90)),
+        ("woodwork", _signal_count(stats.woodwork_total, mid=1.0, high=2.0)),
+        ("shots_off", _signal_count(stats.shots_off_total, mid=3.0, high=7.0)),
+        ("shots_blocked", _signal_count(stats.shots_blocked_total, mid=2.0, high=5.0)),
+        (
+            "shots_inside_box",
+            _signal_count(stats.shots_inside_box_total, mid=3.0, high=7.0),
         ),
-    }
-    if priors is not None:
-        signals["team_priors"] = _clamp01(priors.p_over05_prior)
-
-    sot = _signal_count(stats.sot_total, mid=2.0, high=5.0)
-    if sot is not None:
-        signals["sot"] = sot
-    att = _signal_count(stats.attacks_total, mid=25.0, high=55.0)
-    if att is not None:
-        signals["attacks"] = att
-    cor = _signal_count(stats.corners_total, mid=3.0, high=7.0)
-    if cor is not None:
-        signals["corners"] = cor
-    poss = _signal_possession(stats.possession_home)
-    if poss is not None:
-        signals["possession"] = poss
-    sav = _signal_saves(stats.saves_total, stats.sot_total)
-    if sav is not None:
-        signals["saves"] = sav
-    dy = _signal_def_yellows(stats.def_yellows_total)
-    if dy is not None:
-        signals["def_yellows"] = dy
-    sub = _signal_subs(stats)
-    if sub is not None:
-        signals["subs_formation"] = sub
-
-    if weather_signal is not None:
-        signals["weather"] = _clamp01(weather_signal)
+        (
+            "shots_outside_box",
+            _signal_count(stats.shots_outside_box_total, mid=2.0, high=5.0),
+        ),
+    ]
+    for key, sig in mapping:
+        if sig is not None and key in BASE_WEIGHTS:
+            signals[key] = _clamp01(sig)
 
     if extra_signals:
         for k, v in extra_signals.items():
-            if k in MVP_OMIT_TERMS:
+            if k not in BASE_WEIGHTS:
                 continue
             signals[k] = _clamp01(float(v))
 
-    # Always omit MVP terms even if somehow provided.
-    for k in MVP_OMIT_TERMS:
-        signals.pop(k, None)
     return signals
 
 
@@ -239,6 +168,21 @@ def snapshot_from_clock(
     )
 
 
+def _shot_features(stats: LiveVolumeStats) -> dict[str, Any]:
+    return {
+        "shots_total": stats.shots_total,
+        "sot_total": stats.sot_total,
+        "shot_xg_total": stats.shot_xg_total,
+        "xgot_total": stats.xgot_total,
+        "woodwork_total": stats.woodwork_total,
+        "shots_off_total": stats.shots_off_total,
+        "shots_blocked_total": stats.shots_blocked_total,
+        "shots_inside_box_total": stats.shots_inside_box_total,
+        "shots_outside_box_total": stats.shots_outside_box_total,
+        "source_half": stats.source_half,
+    }
+
+
 def score_live30(
     *,
     fixture_id: int | str,
@@ -256,12 +200,14 @@ def score_live30(
     omit: frozenset[str] | set[str] | None = None,
     apply_dynamic: bool = True,
 ) -> Live30Score:
-    """Emit product xG for 0-0 @ ≈30′, or settled/skip outside the gate.
+    """Emit product xG for 0-0 @ ≈30′ from shot stats, or settled/skip.
 
-    Fail-closed: missing minute/score → skipped (no invented xG).
+    Fail-closed: missing minute/score → skipped.
     Already scored in window → xG=100 settled.
     Outside 28–32′ 1H → skipped.
+    No parseable shot criteria → skipped (no invented prior).
     """
+    _ = (weather_adverse, fatigue_flag)  # not in shot-index blend
     snap = snapshot_from_clock(
         fixture_id,
         minute=minute,
@@ -271,7 +217,7 @@ def score_live30(
     )
     notes: list[str] = [
         f"window={LIVE_WINDOW_MIN}-{LIVE_WINDOW_MAX} target={LIVE_TARGET_MINUTE}",
-        "omit+renorm: live_ratings, coach_h2h",
+        "index=shot_stats_v1 (9 criteria)",
     ]
 
     if snap.minute is None or snap.score_home is None or snap.score_away is None:
@@ -308,7 +254,6 @@ def score_live30(
             notes=tuple(notes),
         )
 
-    # Settled Over 0.5 inside the window.
     if not snap.is_00:
         return Live30Score(
             fixture_id=fixture_id,
@@ -334,22 +279,20 @@ def score_live30(
         league_p_over05_given_00=league_p_over05_given_00,
         weather_signal=weather_signal,
     )
-    omit_set = set(MVP_OMIT_TERMS) | set(omit or ())
+    omit_set = set(omit or ())
     available = set(signals)
 
     if apply_dynamic:
         deltas = event_shift_deltas(
+            shots_total=live_stats.shots_total,
             sot_total=live_stats.sot_total,
-            attacks_total=live_stats.attacks_total,
-            corners_total=live_stats.corners_total,
-            saves_total=live_stats.saves_total,
-            possession_home=live_stats.possession_home,
-            def_yellows_total=live_stats.def_yellows_total,
-            red_card=live_stats.has_red,
-            subs_count=live_stats.subs_total,
-            formation_shift=formation_shift_label(live_stats),
-            weather_adverse=weather_adverse,
-            fatigue_flag=fatigue_flag,
+            shot_xg_total=live_stats.shot_xg_total,
+            xgot_total=live_stats.xgot_total,
+            woodwork_total=live_stats.woodwork_total,
+            shots_off_total=live_stats.shots_off_total,
+            shots_blocked_total=live_stats.shots_blocked_total,
+            shots_inside_box_total=live_stats.shots_inside_box_total,
+            shots_outside_box_total=live_stats.shots_outside_box_total,
         )
         weights = apply_event_shifts(
             deltas=deltas, omit=omit_set, available=available
@@ -372,8 +315,9 @@ def score_live30(
             p_00_ft=1.0,
             xg_score=0,
             skipped=True,
-            skip_reason="no_usable_weights",
-            notes=tuple(notes),
+            skip_reason="no_usable_shot_stats",
+            features=_shot_features(live_stats),
+            notes=tuple(notes + ["fail-closed: no shot criteria available"]),
         )
 
     p = _clamp01(_blend(signals, weights))
@@ -391,18 +335,7 @@ def score_live30(
         xg_score=xg,
         weights_used=weights,
         signals=signals,
-        features={
-            "sot_total": live_stats.sot_total,
-            "attacks_total": live_stats.attacks_total,
-            "corners_total": live_stats.corners_total,
-            "possession_home": live_stats.possession_home,
-            "saves_total": live_stats.saves_total,
-            "def_yellows_total": live_stats.def_yellows_total,
-            "subs_total": live_stats.subs_total,
-            "source_half": live_stats.source_half,
-            "formation_home": live_stats.formation_home_now or live_stats.formation_home_ko,
-            "formation_away": live_stats.formation_away_now or live_stats.formation_away_ko,
-        },
+        features=_shot_features(live_stats),
         notes=tuple(notes),
     )
 

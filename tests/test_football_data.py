@@ -20,6 +20,7 @@ from goal_xg.features.coach_identity import (
     resolve_match_coaches,
 )
 from goal_xg.model.weights import (
+    BASE_WEIGHTS,
     COACH_IDENTITY_FEATURE,
     COACH_H2H_TERM,
     MVP_OMIT_TERMS,
@@ -188,12 +189,14 @@ def test_big5_codes_locked() -> None:
     assert BIG5_COMPETITION_CODES == ("PL", "PD", "SA", "BL1", "FL1")
 
 
-def test_coach_h2h_still_omitted_identity_not_weighted() -> None:
-    assert COACH_H2H_TERM in MVP_OMIT_TERMS
-    assert COACH_IDENTITY_FEATURE not in MVP_OMIT_TERMS  # soft meta, not scored
+def test_coach_h2h_not_in_shot_index() -> None:
+    assert COACH_H2H_TERM not in BASE_WEIGHTS
+    assert COACH_IDENTITY_FEATURE not in BASE_WEIGHTS
+    assert COACH_IDENTITY_FEATURE not in MVP_OMIT_TERMS
     w = mvp_renorm()
     assert "coach_h2h" not in w
     assert COACH_IDENTITY_FEATURE not in w
+    assert set(w) == set(BASE_WEIGHTS)
 
 
 def test_identity_signal_pair_does_not_inject_h2h() -> None:

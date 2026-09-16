@@ -54,16 +54,24 @@ def _stats(raw: Any) -> LiveVolumeStats | None:
     if not isinstance(raw, dict):
         return None
     return LiveVolumeStats(
+        shots_total_home=raw.get("shots_total_home"),
+        shots_total_away=raw.get("shots_total_away"),
         sot_home=raw.get("sot_home"),
         sot_away=raw.get("sot_away"),
-        dangerous_attacks_home=raw.get("dangerous_attacks_home"),
-        dangerous_attacks_away=raw.get("dangerous_attacks_away"),
-        corners_home=raw.get("corners_home"),
-        corners_away=raw.get("corners_away"),
-        possession_home=raw.get("possession_home"),
-        possession_away=raw.get("possession_away"),
-        saves_home=raw.get("saves_home"),
-        saves_away=raw.get("saves_away"),
+        shot_xg_home=raw.get("shot_xg_home"),
+        shot_xg_away=raw.get("shot_xg_away"),
+        xgot_home=raw.get("xgot_home"),
+        xgot_away=raw.get("xgot_away"),
+        woodwork_home=raw.get("woodwork_home"),
+        woodwork_away=raw.get("woodwork_away"),
+        shots_off_home=raw.get("shots_off_home"),
+        shots_off_away=raw.get("shots_off_away"),
+        shots_blocked_home=raw.get("shots_blocked_home"),
+        shots_blocked_away=raw.get("shots_blocked_away"),
+        shots_inside_box_home=raw.get("shots_inside_box_home"),
+        shots_inside_box_away=raw.get("shots_inside_box_away"),
+        shots_outside_box_home=raw.get("shots_outside_box_home"),
+        shots_outside_box_away=raw.get("shots_outside_box_away"),
         source_half=raw.get("source_half"),
     )
 

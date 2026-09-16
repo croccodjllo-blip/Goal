@@ -20,7 +20,7 @@ from goal_xg.live30.service import (
     live_row_to_state,
     score_fixture_live30,
 )
-from goal_xg.model.weights import BASE_WEIGHTS, MVP_OMIT_TERMS
+from goal_xg.model.weights import BASE_WEIGHTS, COMPONENT_LABELS_IT
 
 _WEB_DIR = Path(__file__).resolve().parent
 _TEMPLATES = Jinja2Templates(directory=str(_WEB_DIR / "templates"))
@@ -169,43 +169,23 @@ def _row_card(row: dict[str, Any]) -> dict[str, Any]:
 
 
 _FEATURE_LABELS: dict[str, str] = {
+    "shots_total": "Tiri totali",
     "sot_total": "Tiri in porta",
-    "attacks_total": "Attacchi",
-    "corners_total": "Calci d'angolo",
-    "possession_home": "Possesso casa %",
-    "saves_total": "Parate",
-    "def_yellows_total": "Ammonizioni dif.",
-    "subs_total": "Sostituzioni",
+    "shot_xg_total": "Goal attesi (xG)",
+    "xgot_total": "xGOT",
+    "woodwork_total": "Pali e traverse",
+    "shots_off_total": "Tiri fuori",
+    "shots_blocked_total": "Tiri respinti",
+    "shots_inside_box_total": "Tiri in area",
+    "shots_outside_box_total": "Tiri da fuori",
     "source_half": "Fonte stats",
-    "formation_home": "Modulo casa",
-    "formation_away": "Modulo trasferta",
     "settled": "Settled",
+    "prior_fallback": "Prior fallback",
 }
 
 
-# BASE_WEIGHTS terms → short Italian labels (fixture "Indice — componenti").
-_COMPONENT_LABELS: dict[str, str] = {
-    "residual_time": "Tempo residuo",
-    "team_priors": "Prior squadre",
-    "sot": "Tiri in porta",
-    "attacks": "Attacchi",
-    "corners": "Calci d'angolo",
-    "possession": "Possesso",
-    "saves": "Parate",
-    "live_ratings": "Rating live",
-    "form": "Forma recente",
-    "goal_minutes_last5": "Timing gol (ult. 5)",
-    "streaks": "Streak CS / scoring",
-    "matchup": "Matchup avversario",
-    "subs_formation": "Sub + modulo",
-    "scoring_by_formation": "Gol per modulo",
-    "standings": "Classifica / incentivo",
-    "fatigue": "Fatica / congestione",
-    "def_yellows": "Gialli difensori",
-    "club_h2h": "H2H società",
-    "coach_h2h": "H2H allenatori",
-    "weather": "Meteo",
-}
+# Shot-index BASE_WEIGHTS → Italian labels (fixture «Indice — componenti»).
+_COMPONENT_LABELS: dict[str, str] = dict(COMPONENT_LABELS_IT)
 
 
 def _group_by_league(
@@ -248,10 +228,7 @@ def _feature_rows(score: dict[str, Any] | None) -> list[dict[str, str]]:
 
 
 def _component_rows(score: dict[str, Any] | None) -> list[dict[str, Any]]:
-    """All BASE_WEIGHTS terms with active / omit-MVP / missing status.
-
-    Readable fixture breakdown — not a raw ``Segnale · …`` decimal dump.
-    """
+    """Only available shot-index criteria (Attivo). No omit/absent rows."""
     signals: dict[str, Any] = {}
     weights: dict[str, Any] = {}
     if score:
@@ -261,66 +238,48 @@ def _component_rows(score: dict[str, Any] | None) -> list[dict[str, Any]]:
             weights = score["weights_used"]
 
     rows: list[dict[str, Any]] = []
-    for key, base_pp in BASE_WEIGHTS.items():
+    order: list[str] = []
+    for key in BASE_WEIGHTS:
+        if key in signals or key in weights:
+            order.append(key)
+    for key in weights:
+        if key not in order:
+            order.append(str(key))
+    for key in signals:
+        if key not in order:
+            order.append(str(key))
+
+    for key in order:
+        if key not in BASE_WEIGHTS:
+            continue
+        if key not in signals or signals[key] is None:
+            continue
         label = _COMPONENT_LABELS.get(key, key.replace("_", " "))
-        base_w = float(base_pp)
-        if key in MVP_OMIT_TERMS:
-            rows.append(
-                {
-                    "id": key,
-                    "label": label,
-                    "status": "omit",
-                    "status_label": "Omit MVP · renorm",
-                    "value": None,
-                    "value_display": "—",
-                    "weight_pp": None,
-                    "base_pp": base_w,
-                    "weight_display": f"base {base_w:.0f}%",
-                }
-            )
+        base_w = float(BASE_WEIGHTS[key])
+        try:
+            sig = float(signals[key])
+            value_display = f"{sig:.2f}"
+        except (TypeError, ValueError):
             continue
-
-        if key in signals and signals[key] is not None:
-            try:
-                sig = float(signals[key])
-                value_display = f"{sig:.2f}"
-            except (TypeError, ValueError):
-                sig = None
-                value_display = str(signals[key])
-            w_raw = weights.get(key)
-            try:
-                w_pp = float(w_raw) if w_raw is not None else None
-            except (TypeError, ValueError):
-                w_pp = None
-            weight_display = (
-                f"peso {w_pp:.1f}%" if w_pp is not None else f"base {base_w:.0f}%"
-            )
-            rows.append(
-                {
-                    "id": key,
-                    "label": label,
-                    "status": "active",
-                    "status_label": "Attivo",
-                    "value": sig,
-                    "value_display": value_display,
-                    "weight_pp": w_pp,
-                    "base_pp": base_w,
-                    "weight_display": weight_display,
-                }
-            )
-            continue
-
+        w_raw = weights.get(key)
+        try:
+            w_pp = float(w_raw) if w_raw is not None else None
+        except (TypeError, ValueError):
+            w_pp = None
+        weight_display = (
+            f"peso {w_pp:.1f}%" if w_pp is not None else f"base {base_w:.0f}%"
+        )
         rows.append(
             {
                 "id": key,
                 "label": label,
-                "status": "missing",
-                "status_label": "Assente · renorm",
-                "value": None,
-                "value_display": "—",
-                "weight_pp": None,
+                "status": "active",
+                "status_label": "Attivo",
+                "value": sig,
+                "value_display": value_display,
+                "weight_pp": w_pp,
                 "base_pp": base_w,
-                "weight_display": f"base {base_w:.0f}%",
+                "weight_display": weight_display,
             }
         )
     return rows

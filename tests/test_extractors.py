@@ -150,9 +150,24 @@ def test_build_extra_signals_and_live_wire() -> None:
         league_p_over05_given_00=0.75,
     )
     assert not scored.skipped
-    assert "form" in scored.weights_used
-    assert "club_h2h" in scored.weights_used
-    assert "live_ratings" not in scored.weights_used
+    # Shot-index only: prematch extractors are ignored by the live blend.
+    assert "sot" in scored.weights_used
+    assert "form" not in scored.weights_used
+    assert "club_h2h" not in scored.weights_used
+    assert "residual_time" not in scored.weights_used
+    assert set(scored.weights_used) <= set(
+        {
+            "shots_total",
+            "sot",
+            "shot_xg",
+            "xgot",
+            "woodwork",
+            "shots_off",
+            "shots_blocked",
+            "shots_inside_box",
+            "shots_outside_box",
+        }
+    )
 
 
 def test_omit_all_extractors_when_no_data() -> None:

@@ -145,40 +145,52 @@ def test_parse_statistics_first_half() -> None:
         "data": {
             "match": {
                 "firstHalf": [
+                    {"type": "Total Shots", "home": "7", "away": "4"},
                     {"type": "Shots on Goal", "home": "2", "away": "1"},
-                    {"type": "Corner Kicks", "home": "3", "away": "2"},
-                    {"type": "Ball Possession", "home": "55", "away": "45"},
-                    {"type": "Dangerous Attacks", "home": "20", "away": "15"},
-                    {"type": "Goalkeeper Saves", "home": "1", "away": "2"},
+                    {"type": "Expected Goals", "home": "0.55", "away": "0.30"},
+                    {"type": "Expected Goals on Target", "home": "0.40", "away": "0.20"},
+                    {"type": "Hit Woodwork", "home": "1", "away": "0"},
+                    {"type": "Shots off Goal", "home": "3", "away": "2"},
+                    {"type": "Blocked Shots", "home": "2", "away": "1"},
+                    {"type": "Shots Insidebox", "home": "4", "away": "2"},
+                    {"type": "Shots Outsidebox", "home": "3", "away": "2"},
                 ]
             }
         },
     }
     stats = parse_statistics_payload(payload)
     assert stats.source_half == "firstHalf"
+    assert stats.shots_total == 11
     assert stats.sot_total == 3
-    assert stats.corners_total == 5
-    assert stats.possession_home == 55
-    assert stats.attacks_total == 35  # prefers dangerous
-    assert stats.saves_total == 3
+    assert stats.shot_xg_total == pytest.approx(0.85)
+    assert stats.xgot_total == pytest.approx(0.60)
+    assert stats.woodwork_total == 1
+    assert stats.shots_off_total == 5
+    assert stats.shots_blocked_total == 3
+    assert stats.shots_inside_box_total == 6
+    assert stats.shots_outside_box_total == 5
 
 
 def test_score_live30_primary_path() -> None:
     stats = LiveVolumeStats(
+        shots_total_home=6,
+        shots_total_away=4,
         sot_home=2,
         sot_away=1,
-        dangerous_attacks_home=22,
-        dangerous_attacks_away=18,
-        corners_home=3,
-        corners_away=2,
-        possession_home=54,
-        possession_away=46,
-        saves_home=1,
-        saves_away=2,
-        def_yellows_home=1,
-        def_yellows_away=0,
-        subs_home=0,
-        subs_away=0,
+        shot_xg_home=0.5,
+        shot_xg_away=0.3,
+        xgot_home=0.35,
+        xgot_away=0.2,
+        woodwork_home=0,
+        woodwork_away=0,
+        shots_off_home=2,
+        shots_off_away=2,
+        shots_blocked_home=1,
+        shots_blocked_away=1,
+        shots_inside_box_home=3,
+        shots_inside_box_away=2,
+        shots_outside_box_home=3,
+        shots_outside_box_away=2,
         source_half="firstHalf",
     )
     result = score_live30(
@@ -195,10 +207,13 @@ def test_score_live30_primary_path() -> None:
     assert result.context == "live30"
     assert 0 <= result.xg_score <= 100
     assert result.xg_score == round(100 * result.p_over05_ft)
-    assert "live_ratings" not in result.weights_used
-    assert "coach_h2h" not in result.weights_used
+    assert "residual_time" not in result.weights_used
+    assert "team_priors" not in result.weights_used
+    assert "corners" not in result.weights_used
     assert "sot" in result.weights_used
+    assert "shot_xg" in result.weights_used
     assert abs(sum(result.weights_used.values()) - 100.0) < 1e-6
+    assert set(result.signals) <= set(result.weights_used) | set(result.signals)
 
 
 def test_score_live30_settled_and_skip() -> None:
@@ -231,28 +246,42 @@ def test_score_live30_settled_and_skip() -> None:
 
 
 def test_dynamic_weight_caps() -> None:
-    deltas = event_shift_deltas(sot_total=6, attacks_total=60, corners_total=8, saves_total=5)
+    deltas = event_shift_deltas(
+        sot_total=6, shots_total=12, shot_xg_total=1.1, xgot_total=0.8
+    )
     assert all(abs(v) <= SHIFT_CAP_PP for v in deltas.values())
+    assert "residual_time" not in deltas
     w = apply_event_shifts(
         deltas=deltas,
         omit=MVP_OMIT_TERMS,
-        available={"residual_time", "team_priors", "sot", "attacks", "corners", "saves", "form"},
+        available={"sot", "shot_xg", "xgot", "shots_total", "shots_inside_box"},
     )
     assert abs(sum(w.values()) - 100.0) < 1e-6
-    for k in ("sot", "attacks", "corners", "saves"):
-        if k in w:
-            # After renorm a term can exceed 18% of the *renormed* mass if the
-            # available set is small — cap applies pre-renorm. Check pre-path:
-            assert k in w
-    # Explicit pre-renorm clamp path: huge base live term.
+    assert "residual_time" not in w
     capped = apply_event_shifts(
-        base={"sot": 30.0, "residual_time": 14.0},
+        base={"sot": 30.0, "shots_total": 14.0},
         deltas={"sot": 5.0},
-        available={"sot", "residual_time"},
+        available={"sot", "shots_total"},
     )
-    # After clamp to 18 then renorm, sot share = 18/(18+14)*100
     assert capped["sot"] == pytest.approx(18 / 32 * 100)
     assert LIVE_VOLUME_CAP_PP == 18.0
+
+
+def test_score_live30_no_stats_fail_closed() -> None:
+    result = score_live30(
+        fixture_id="fx",
+        minute=30,
+        period="1H",
+        score_home=0,
+        score_away=0,
+    )
+    assert result.skipped
+    assert result.skip_reason == "no_usable_shot_stats"
+    assert "residual_time" not in result.signals
+    assert result.weights_used == {}
+    sterile = event_shift_deltas(sot_total=0, shots_total=1, shot_xg_total=0.05)
+    assert "residual_time" not in sterile
+    assert sterile.get("shots_total", 0) >= 0
 
 
 def _mock_transport(handlers: dict[str, Any]) -> httpx.Client:
@@ -329,11 +358,14 @@ def test_list_candidates_and_score_fixture_mocked() -> None:
         "data": {
             "match": {
                 "firstHalf": [
+                    {"type": "Total Shots", "home": "6", "away": "4"},
                     {"type": "Shots on Goal", "home": "3", "away": "1"},
-                    {"type": "Corners", "home": "2", "away": "2"},
-                    {"type": "Attacks", "home": "30", "away": "25"},
-                    {"type": "Ball Possession", "home": "52", "away": "48"},
-                    {"type": "Saves", "home": "1", "away": "2"},
+                    {"type": "Expected Goals", "home": "0.6", "away": "0.3"},
+                    {"type": "Expected Goals on Target", "home": "0.4", "away": "0.2"},
+                    {"type": "Shots off Goal", "home": "2", "away": "2"},
+                    {"type": "Blocked Shots", "home": "1", "away": "1"},
+                    {"type": "Shots Insidebox", "home": "3", "away": "2"},
+                    {"type": "Shots Outsidebox", "home": "3", "away": "2"},
                 ]
             }
         },
@@ -361,8 +393,9 @@ def test_list_candidates_and_score_fixture_mocked() -> None:
         scored = score_fixture_live30(client, "fx-live", fetch_history=False)
         assert not scored.skipped
         assert scored.xg_score == round(100 * scored.p_over05_ft)
-        assert "live_ratings" not in scored.weights_used
-        assert "coach_h2h" not in scored.weights_used
+        assert "sot" in scored.weights_used
+        assert "residual_time" not in scored.weights_used
+        assert "team_priors" not in scored.weights_used
     finally:
         client.close()
         http.close()

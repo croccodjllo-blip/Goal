@@ -1,71 +1,56 @@
-"""Base weights + omit/renorm (fail-closed).
+"""Base weights + omit/renorm (fail-closed) — shot-stats index only.
 
-Source of truth: docs/indice-xg-0-100.md (pesi variabili v1, Σ=100%).
-MVP omit by default: live player ratings + true coach-vs-coach H2H.
+Product-xG live blend uses **only** these nine GOAL live shot criteria
+(Alessandro 2026-09-16). Old residual_time / form / corners / possession /
+priors / etc. are **not** in the weighted index.
 
-Coach identity (football-data.org ``team.coach`` / ``/persons/{id}``) is a
-**soft metadata feature** (``coach_identity``) — not a BASE_WEIGHTS term and
-never a substitute for ``coach_h2h``. No dedicated coach-vs-coach endpoint →
-keep ``coach_h2h`` omit + renorm.
+Initial weights (Σ=100%), quality > raw volume:
+  shot_xg 20 · xgot 16 · sot 18 · shots_total 14 · shots_inside_box 8 ·
+  woodwork 6 · shots_off 6 · shots_blocked 6 · shots_outside_box 6
 """
 
 from __future__ import annotations
 
 from typing import Mapping
 
-# Locked base table (percent points). Keys are stable feature ids used in code.
+# Locked base table (percent points). Keys = stable feature ids.
 BASE_WEIGHTS: dict[str, float] = {
-    "residual_time": 14.0,
-    "team_priors": 10.0,
-    "sot": 10.0,
-    "attacks": 8.0,
-    "corners": 6.0,
-    "possession": 5.0,
-    "saves": 5.0,
-    "live_ratings": 4.0,  # MVP omit + renorm
-    "form": 4.0,
-    "goal_minutes_last5": 4.0,
-    "streaks": 4.0,
-    "matchup": 4.0,
-    "subs_formation": 3.0,
-    "scoring_by_formation": 3.0,
-    "standings": 3.0,
-    "fatigue": 3.0,
-    "def_yellows": 3.0,
-    "club_h2h": 3.0,
-    "coach_h2h": 2.0,  # true H2H: omit + renorm (no fd.org endpoint)
-    "weather": 2.0,
+    "shots_total": 14.0,  # Tiri totali
+    "sot": 18.0,  # Tiri in porta
+    "shot_xg": 20.0,  # Goal attesi (xG classico cumulato)
+    "xgot": 16.0,  # Expected goals on target (xGOT)
+    "woodwork": 6.0,  # Pali e traverse
+    "shots_off": 6.0,  # Tiri fuori
+    "shots_blocked": 6.0,  # Tiri respinti
+    "shots_inside_box": 8.0,  # Tiri in area di rigore
+    "shots_outside_box": 6.0,  # Tiri da fuori area
 }
 
-# Soft feature id (metadata only; not in BASE_WEIGHTS / not scored).
+# Italian UI labels for fixture «Indice — componenti».
+COMPONENT_LABELS_IT: dict[str, str] = {
+    "shots_total": "Tiri totali",
+    "sot": "Tiri in porta",
+    "shot_xg": "Goal attesi (xG)",
+    "xgot": "Expected goals on target (xGOT)",
+    "woodwork": "Pali e traverse",
+    "shots_off": "Tiri fuori",
+    "shots_blocked": "Tiri respinti",
+    "shots_inside_box": "Tiri in area di rigore",
+    "shots_outside_box": "Tiri da fuori area",
+}
+
+# Soft metadata (not scored). Kept for import compatibility.
 COACH_IDENTITY_FEATURE = "coach_identity"
 
-# Always omitted until a licensed live-ratings feed exists and true
-# coach-vs-coach H2H is available (football-data.org has identity only).
-MVP_OMIT_TERMS: frozenset[str] = frozenset({"live_ratings", "coach_h2h"})
+# No MVP omit terms in the shot-only table (legacy ids removed from BASE_WEIGHTS).
+MVP_OMIT_TERMS: frozenset[str] = frozenset()
 COACH_H2H_TERM = "coach_h2h"
 
-# Pre-match Phase A: only priors (+ optional form later). Live terms absent.
-PHASE_A_PREMATCH_AVAILABLE: frozenset[str] = frozenset(
-    {
-        "team_priors",
-        "form",
-        "goal_minutes_last5",
-        "streaks",
-        "matchup",
-        "scoring_by_formation",
-        "standings",
-        "fatigue",
-        "club_h2h",
-        "coach_h2h",
-        "weather",
-        # residual_time is live-conditional; unused in pure prematch path
-    }
-)
+# Prematch Phase A is separate from the live shot index (uses team priors only).
+PHASE_A_PREMATCH_AVAILABLE: frozenset[str] = frozenset({"team_priors"})
 
 
 def mvp_omit() -> frozenset[str]:
-    """MVP omit set: live ratings + true coach H2H (identity is soft-only)."""
     return MVP_OMIT_TERMS
 
 
@@ -77,10 +62,7 @@ def omit_and_renorm(
 ) -> dict[str, float]:
     """Drop missing/omitted terms and renormalize remaining weights to Σ=100.
 
-    Rules (locked):
-    - Fail-closed: omitted / unavailable terms get weight 0 and do not participate.
-    - If ``available`` is set, any key not in ``available`` is treated as missing.
-    - If nothing remains, returns an empty dict (caller must not invent signal).
+    Fail-closed: omitted / unavailable → weight 0. Empty if nothing remains.
     """
     weights = dict(base or BASE_WEIGHTS)
     drop: set[str] = set(omit or ())
@@ -95,5 +77,5 @@ def omit_and_renorm(
 
 
 def mvp_renorm(base: Mapping[str, float] | None = None) -> dict[str, float]:
-    """Convenience: omit live_ratings + coach_h2h then renorm."""
+    """Omit MVP terms (none in shot-only table) then renorm."""
     return omit_and_renorm(base, omit=MVP_OMIT_TERMS)

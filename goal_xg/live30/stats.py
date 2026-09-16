@@ -1,27 +1,34 @@
-"""Parse GOAL live statistics / events into live @30′ feature counts."""
+"""Parse GOAL live statistics / events into live @30′ shot features."""
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Mapping, Sequence
 
 
 @dataclass(frozen=True)
 class LiveVolumeStats:
-    """Counts / rates at the ≈30′ snapshot (prefer firstHalf when available)."""
+    """Shot counts / rates at the ≈30′ snapshot (prefer firstHalf)."""
 
+    shots_total_home: float | None = None
+    shots_total_away: float | None = None
     sot_home: float | None = None
     sot_away: float | None = None
-    attacks_home: float | None = None
-    attacks_away: float | None = None
-    dangerous_attacks_home: float | None = None
-    dangerous_attacks_away: float | None = None
-    corners_home: float | None = None
-    corners_away: float | None = None
-    possession_home: float | None = None
-    possession_away: float | None = None
-    saves_home: float | None = None
-    saves_away: float | None = None
+    shot_xg_home: float | None = None
+    shot_xg_away: float | None = None
+    xgot_home: float | None = None
+    xgot_away: float | None = None
+    woodwork_home: float | None = None
+    woodwork_away: float | None = None
+    shots_off_home: float | None = None
+    shots_off_away: float | None = None
+    shots_blocked_home: float | None = None
+    shots_blocked_away: float | None = None
+    shots_inside_box_home: float | None = None
+    shots_inside_box_away: float | None = None
+    shots_outside_box_home: float | None = None
+    shots_outside_box_away: float | None = None
+    # Kept for event merge / formation (not in shot index blend).
     yellows_home: float | None = None
     yellows_away: float | None = None
     def_yellows_home: float | None = None
@@ -34,28 +41,44 @@ class LiveVolumeStats:
     formation_away_ko: str | None = None
     formation_home_now: str | None = None
     formation_away_now: str | None = None
-    source_half: str | None = None  # "firstHalf" | "fullTime" | …
+    source_half: str | None = None
     notes: tuple[str, ...] = ()
+
+    @property
+    def shots_total(self) -> float | None:
+        return _sum_opt(self.shots_total_home, self.shots_total_away)
 
     @property
     def sot_total(self) -> float | None:
         return _sum_opt(self.sot_home, self.sot_away)
 
     @property
-    def corners_total(self) -> float | None:
-        return _sum_opt(self.corners_home, self.corners_away)
+    def shot_xg_total(self) -> float | None:
+        return _sum_opt(self.shot_xg_home, self.shot_xg_away)
 
     @property
-    def saves_total(self) -> float | None:
-        return _sum_opt(self.saves_home, self.saves_away)
+    def xgot_total(self) -> float | None:
+        return _sum_opt(self.xgot_home, self.xgot_away)
 
     @property
-    def attacks_total(self) -> float | None:
-        # Prefer dangerous attacks when both sides present.
-        dang = _sum_opt(self.dangerous_attacks_home, self.dangerous_attacks_away)
-        if dang is not None:
-            return dang
-        return _sum_opt(self.attacks_home, self.attacks_away)
+    def woodwork_total(self) -> float | None:
+        return _sum_opt(self.woodwork_home, self.woodwork_away)
+
+    @property
+    def shots_off_total(self) -> float | None:
+        return _sum_opt(self.shots_off_home, self.shots_off_away)
+
+    @property
+    def shots_blocked_total(self) -> float | None:
+        return _sum_opt(self.shots_blocked_home, self.shots_blocked_away)
+
+    @property
+    def shots_inside_box_total(self) -> float | None:
+        return _sum_opt(self.shots_inside_box_home, self.shots_inside_box_away)
+
+    @property
+    def shots_outside_box_total(self) -> float | None:
+        return _sum_opt(self.shots_outside_box_home, self.shots_outside_box_away)
 
     @property
     def def_yellows_total(self) -> float | None:
@@ -102,34 +125,71 @@ def _unwrap_data(payload: Any) -> Any:
     return payload
 
 
-# Provider type-name aliases → internal field prefix.
+# Provider type-name aliases → internal field prefix (shot index + cards).
 _STAT_ALIASES: dict[str, str] = {
+    # Tiri totali
+    "total shots": "shots_total",
+    "shots total": "shots_total",
+    "total shot": "shots_total",
+    "shots": "shots_total",
+    "shot attempts": "shots_total",
+    # Tiri in porta
     "shots on goal": "sot",
     "shots on target": "sot",
     "shot on target": "sot",
     "sot": "sot",
     "on target": "sot",
-    "corners": "corners",
-    "corner kicks": "corners",
-    "ball possession": "possession",
-    "possession": "possession",
-    "possession %": "possession",
-    "attacks": "attacks",
-    "attack": "attacks",
-    "dangerous attacks": "dangerous_attacks",
-    "dangerous attack": "dangerous_attacks",
-    "goalkeeper saves": "saves",
-    "saves": "saves",
-    "gk saves": "saves",
+    # Goal attesi (xG)
+    "expected goals": "shot_xg",
+    "expected goal": "shot_xg",
+    "xg": "shot_xg",
+    "xgoals": "shot_xg",
+    "goals expected": "shot_xg",
+    # xGOT
+    "expected goals on target": "xgot",
+    "xg on target": "xgot",
+    "xgot": "xgot",
+    "expected goals on target (xgot)": "xgot",
+    # Pali e traverse
+    "hit woodwork": "woodwork",
+    "woodwork": "woodwork",
+    "goal post": "woodwork",
+    "posts and bars": "woodwork",
+    "pali e traverse": "woodwork",
+    # Tiri fuori
+    "shots off goal": "shots_off",
+    "shots off target": "shots_off",
+    "shot off target": "shots_off",
+    "off target": "shots_off",
+    "shots off": "shots_off",
+    # Tiri respinti
+    "blocked shots": "shots_blocked",
+    "shots blocked": "shots_blocked",
+    "blocked shot": "shots_blocked",
+    # Tiri in area
+    "shots insidebox": "shots_inside_box",
+    "shots inside box": "shots_inside_box",
+    "shots in the box": "shots_inside_box",
+    "inside box": "shots_inside_box",
+    "shots inside the box": "shots_inside_box",
+    # Tiri da fuori
+    "shots outsidebox": "shots_outside_box",
+    "shots outside box": "shots_outside_box",
+    "shots out of the box": "shots_outside_box",
+    "outside box": "shots_outside_box",
+    "shots outside the box": "shots_outside_box",
+    # Cards (event enrichment only)
     "yellow cards": "yellows",
     "yellow card": "yellows",
     "red cards": "red",
     "red card": "red",
 }
 
+# Prefer more specific aliases when fuzzy-matching (longer first).
+_ALIAS_FUZZY = sorted(_STAT_ALIASES.items(), key=lambda kv: len(kv[0]), reverse=True)
+
 
 def _pick_half_block(match_block: Mapping[str, Any]) -> tuple[Mapping[str, Any] | None, str | None]:
-    """Prefer firstHalf / 1half for the ~30′ snapshot."""
     for key, label in (
         ("firstHalf", "firstHalf"),
         ("1half", "firstHalf"),
@@ -155,14 +215,10 @@ def _rows_from_block(block: Mapping[str, Any] | Sequence[Any]) -> list[dict[str,
         val = block.get(key)
         if isinstance(val, list):
             return [r for r in val if isinstance(r, dict)]
-    # Flat {type: {home, away}} map.
     rows: list[dict[str, Any]] = []
     for k, v in block.items():
         if isinstance(v, dict) and ("home" in v or "away" in v or "homeValue" in v):
             rows.append({"type": k, **v})
-        elif isinstance(v, (int, float, str)) and k.lower() not in {"period", "half"}:
-            # Skip non-stat scalars.
-            continue
     return rows
 
 
@@ -173,7 +229,6 @@ def _home_away_from_row(row: Mapping[str, Any]) -> tuple[float | None, float | N
     away = row.get("away")
     if away is None:
         away = row.get("awayValue") or row.get("away_value") or row.get("a")
-    # Nested team blocks.
     if home is None and isinstance(row.get("teams"), dict):
         teams = row["teams"]
         th = teams.get("home") if isinstance(teams.get("home"), dict) else {}
@@ -181,6 +236,16 @@ def _home_away_from_row(row: Mapping[str, Any]) -> tuple[float | None, float | N
         home = th.get("value") or th.get("statistics")
         away = ta.get("value") or ta.get("statistics")
     return _to_float(home), _to_float(away)
+
+
+def _map_stat_type(typ: str) -> str | None:
+    key = _STAT_ALIASES.get(typ)
+    if key is not None:
+        return key
+    for alias, mapped in _ALIAS_FUZZY:
+        if alias in typ:
+            return mapped
+    return None
 
 
 def parse_statistics_payload(payload: Any) -> LiveVolumeStats:
@@ -191,7 +256,6 @@ def parse_statistics_payload(payload: Any) -> LiveVolumeStats:
     rows: list[dict[str, Any]] = []
 
     if isinstance(data, dict):
-        # Shape: { match: { firstHalf: ..., fullTime: ... } } or direct halves.
         match = data.get("match") if isinstance(data.get("match"), dict) else data
         if isinstance(match, dict):
             block, half_label = _pick_half_block(match)
@@ -208,18 +272,16 @@ def parse_statistics_payload(payload: Any) -> LiveVolumeStats:
     fields: dict[str, float | None] = {}
     for row in rows:
         typ = str(row.get("type") or row.get("name") or row.get("stat") or "").strip().lower()
-        key = _STAT_ALIASES.get(typ)
-        if key is None:
-            # Fuzzy contains.
-            for alias, mapped in _STAT_ALIASES.items():
-                if alias in typ:
-                    key = mapped
-                    break
+        key = _map_stat_type(typ)
         if key is None:
             continue
+        # Avoid mapping bare "shots" over more specific rows already set —
+        # first match wins; specific aliases are exact-matched first.
         home, away = _home_away_from_row(row)
-        fields[f"{key}_home"] = home
-        fields[f"{key}_away"] = away
+        hk, ak = f"{key}_home", f"{key}_away"
+        if hk not in fields:
+            fields[hk] = home
+            fields[ak] = away
 
     if not fields:
         return LiveVolumeStats(
@@ -228,24 +290,30 @@ def parse_statistics_payload(payload: Any) -> LiveVolumeStats:
         )
 
     return LiveVolumeStats(
+        shots_total_home=fields.get("shots_total_home"),
+        shots_total_away=fields.get("shots_total_away"),
         sot_home=fields.get("sot_home"),
         sot_away=fields.get("sot_away"),
-        attacks_home=fields.get("attacks_home"),
-        attacks_away=fields.get("attacks_away"),
-        dangerous_attacks_home=fields.get("dangerous_attacks_home"),
-        dangerous_attacks_away=fields.get("dangerous_attacks_away"),
-        corners_home=fields.get("corners_home"),
-        corners_away=fields.get("corners_away"),
-        possession_home=fields.get("possession_home"),
-        possession_away=fields.get("possession_away"),
-        saves_home=fields.get("saves_home"),
-        saves_away=fields.get("saves_away"),
+        shot_xg_home=fields.get("shot_xg_home"),
+        shot_xg_away=fields.get("shot_xg_away"),
+        xgot_home=fields.get("xgot_home"),
+        xgot_away=fields.get("xgot_away"),
+        woodwork_home=fields.get("woodwork_home"),
+        woodwork_away=fields.get("woodwork_away"),
+        shots_off_home=fields.get("shots_off_home"),
+        shots_off_away=fields.get("shots_off_away"),
+        shots_blocked_home=fields.get("shots_blocked_home"),
+        shots_blocked_away=fields.get("shots_blocked_away"),
+        shots_inside_box_home=fields.get("shots_inside_box_home"),
+        shots_inside_box_away=fields.get("shots_inside_box_away"),
+        shots_outside_box_home=fields.get("shots_outside_box_home"),
+        shots_outside_box_away=fields.get("shots_outside_box_away"),
         yellows_home=fields.get("yellows_home"),
         yellows_away=fields.get("yellows_away"),
         red_home=fields.get("red_home"),
         red_away=fields.get("red_away"),
         source_half=half_label,
-        notes=tuple(notes) if isinstance(notes, list) else (),
+        notes=tuple(notes),
     )
 
 
@@ -257,7 +325,7 @@ def merge_events_into_stats(
     lineups: Mapping[str, Any] | None = None,
     goalscorer: Sequence[Mapping[str, Any]] | None = None,
 ) -> LiveVolumeStats:
-    """Enrich volume stats with cards / subs / formation from WS or REST."""
+    """Enrich with cards / subs / formation from WS or REST (not shot-index)."""
     yellow_h = stats.yellows_home
     yellow_a = stats.yellows_away
     red_h = stats.red_home
@@ -267,7 +335,7 @@ def merge_events_into_stats(
 
     role_by_name: dict[str, str] = {}
     if isinstance(lineups, dict):
-        for side_key, side in (("home", "home"), ("away", "away")):
+        for side_key in ("home", "away"):
             block = lineups.get(side_key) or lineups.get(f"{side_key}Team")
             if not isinstance(block, dict):
                 continue
@@ -312,16 +380,13 @@ def merge_events_into_stats(
                     rh += 1
                 else:
                     ra += 1
-        yellow_h = float(yh) if cards else yellow_h
-        yellow_a = float(ya) if cards else yellow_a
-        red_h = float(rh) if cards else red_h
-        red_a = float(ra) if cards else red_a
-        # Defender yellows only when lineup roles known; else leave None (omit).
+        yellow_h = float(yh)
+        yellow_a = float(ya)
+        red_h = float(rh)
+        red_a = float(ra)
         if role_by_name:
             def_y_h = float(dyh)
             def_y_a = float(dya)
-        elif yellow_h is None and yellow_a is None:
-            pass
 
     subs_h = stats.subs_home
     subs_a = stats.subs_away
@@ -333,7 +398,6 @@ def merge_events_into_stats(
                 subs_h = len(home_subs)
             if isinstance(away_subs, list):
                 subs_a = len(away_subs)
-            # Empty dict → 0 subs known.
             if not home_subs and not away_subs and substitutions == {}:
                 subs_h = 0
                 subs_a = 0
@@ -348,7 +412,6 @@ def merge_events_into_stats(
                 elif team in {"away", "a"}:
                     sa += 1
                 else:
-                    # Ambiguous — count toward total via home bucket heuristic.
                     if row.get("home_player") or row.get("homePlayer"):
                         sh += 1
                     elif row.get("away_player") or row.get("awayPlayer"):
@@ -360,10 +423,7 @@ def merge_events_into_stats(
     form_h_now = stats.formation_home_now
     form_a_now = stats.formation_away_now
     if isinstance(lineups, dict):
-        for side, ko_attr, now_attr in (
-            ("home", "formation_home_ko", "formation_home_now"),
-            ("away", "formation_away_ko", "formation_away_now"),
-        ):
+        for side in ("home", "away"):
             block = lineups.get(side) or lineups.get(f"{side}Team")
             if not isinstance(block, dict):
                 continue
@@ -375,7 +435,6 @@ def merge_events_into_stats(
                 else:
                     form_a_ko = form_a_ko or str(formation)
                     form_a_now = form_a_now or str(formation)
-        # GOAL-style top-level systems.
         if lineups.get("homeTeamSystem"):
             form_h_ko = form_h_ko or str(lineups["homeTeamSystem"])
             form_h_now = form_h_now or str(lineups["homeTeamSystem"])
@@ -383,22 +442,27 @@ def merge_events_into_stats(
             form_a_ko = form_a_ko or str(lineups["awayTeamSystem"])
             form_a_now = form_a_now or str(lineups["awayTeamSystem"])
 
-    # goalscorer unused for volume (score comes from clock) — silence unused.
     _ = goalscorer
 
     return LiveVolumeStats(
+        shots_total_home=stats.shots_total_home,
+        shots_total_away=stats.shots_total_away,
         sot_home=stats.sot_home,
         sot_away=stats.sot_away,
-        attacks_home=stats.attacks_home,
-        attacks_away=stats.attacks_away,
-        dangerous_attacks_home=stats.dangerous_attacks_home,
-        dangerous_attacks_away=stats.dangerous_attacks_away,
-        corners_home=stats.corners_home,
-        corners_away=stats.corners_away,
-        possession_home=stats.possession_home,
-        possession_away=stats.possession_away,
-        saves_home=stats.saves_home,
-        saves_away=stats.saves_away,
+        shot_xg_home=stats.shot_xg_home,
+        shot_xg_away=stats.shot_xg_away,
+        xgot_home=stats.xgot_home,
+        xgot_away=stats.xgot_away,
+        woodwork_home=stats.woodwork_home,
+        woodwork_away=stats.woodwork_away,
+        shots_off_home=stats.shots_off_home,
+        shots_off_away=stats.shots_off_away,
+        shots_blocked_home=stats.shots_blocked_home,
+        shots_blocked_away=stats.shots_blocked_away,
+        shots_inside_box_home=stats.shots_inside_box_home,
+        shots_inside_box_away=stats.shots_inside_box_away,
+        shots_outside_box_home=stats.shots_outside_box_home,
+        shots_outside_box_away=stats.shots_outside_box_away,
         yellows_home=yellow_h if yellow_h is not None else stats.yellows_home,
         yellows_away=yellow_a if yellow_a is not None else stats.yellows_away,
         def_yellows_home=def_y_h,
@@ -417,7 +481,8 @@ def merge_events_into_stats(
 
 
 def formation_shift_label(stats: LiveVolumeStats) -> str | None:
-    """Crude KO→now formation shift: more defenders ⇒ defensive."""
+    """Crude KO→now formation shift (metadata only; not in shot index)."""
+
     def _def_count(formation: str | None) -> int | None:
         if not formation:
             return None
@@ -425,7 +490,7 @@ def formation_shift_label(stats: LiveVolumeStats) -> str | None:
         digits = [int(p) for p in parts if p.isdigit()]
         if not digits:
             return None
-        return digits[0]  # first number ≈ defenders
+        return digits[0]
 
     shifts: list[str] = []
     for ko, now in (

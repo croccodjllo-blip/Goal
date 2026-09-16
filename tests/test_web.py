@@ -77,32 +77,42 @@ def test_fixture_without_key(monkeypatch) -> None:
     assert "fixture-fallback" in resp.text
 
 
-def test_component_rows_covers_base_weights() -> None:
-    from goal_xg.model.weights import BASE_WEIGHTS, MVP_OMIT_TERMS
+def test_component_rows_only_available_shot_criteria() -> None:
+    from goal_xg.model.weights import BASE_WEIGHTS, COMPONENT_LABELS_IT
     from goal_xg.web.app import _component_rows
 
     rows = _component_rows(
         {
-            "signals": {"residual_time": 0.78, "sot": 0.55, "team_priors": 0.6},
-            "weights_used": {"residual_time": 40.0, "sot": 30.0, "team_priors": 30.0},
+            "signals": {"sot": 0.55, "shot_xg": 0.70, "shots_total": 0.60},
+            "weights_used": {"sot": 30.0, "shot_xg": 40.0, "shots_total": 30.0},
         }
     )
-    assert len(rows) == len(BASE_WEIGHTS)
     by_id = {r["id"]: r for r in rows}
-    assert set(by_id) == set(BASE_WEIGHTS)
-    assert by_id["residual_time"]["status"] == "active"
-    assert by_id["residual_time"]["value_display"] == "0.78"
-    assert "40.0" in by_id["residual_time"]["weight_display"]
-    assert by_id["live_ratings"]["status"] == "omit"
-    assert by_id["coach_h2h"]["status"] == "omit"
-    assert MVP_OMIT_TERMS <= {"live_ratings", "coach_h2h"}
-    assert by_id["form"]["status"] == "missing"
-    assert "Assente" in by_id["form"]["status_label"]
-    assert by_id["sot"]["label"] == "Tiri in porta"
+    assert set(by_id) == {"sot", "shot_xg", "shots_total"}
+    assert all(r["status"] == "active" for r in rows)
+    assert by_id["sot"]["label"] == COMPONENT_LABELS_IT["sot"]
+    assert by_id["shot_xg"]["label"] == "Goal attesi (xG)"
+    assert "40.0" in by_id["shot_xg"]["weight_display"]
+    # Missing among the nine → not listed.
+    assert "xgot" not in by_id
+    assert "woodwork" not in by_id
+    # Old / removed criteria never listed.
+    assert "residual_time" not in by_id
+    assert "team_priors" not in by_id
+    assert "live_ratings" not in by_id
+    assert "corners" not in by_id
+
+    leaked = _component_rows(
+        {
+            "signals": {"residual_time": 0.78, "form": 0.5, "sot": 0.5},
+            "weights_used": {"residual_time": 50.0, "sot": 50.0},
+        }
+    )
+    assert [r["id"] for r in leaked] == ["sot"]
 
     empty = _component_rows(None)
-    assert len(empty) == len(BASE_WEIGHTS)
-    assert all(r["status"] in {"omit", "missing"} for r in empty)
+    assert empty == []
+    assert len(BASE_WEIGHTS) == 9
 
 
 def test_index_and_api_live_share_one_fixtures_live(monkeypatch) -> None:
@@ -182,9 +192,7 @@ def test_index_and_api_live_share_one_fixtures_live(monkeypatch) -> None:
     resp = client.get("/")
     assert resp.status_code == 200
     assert live_hits["n"] == 1
-    # Candidate in Finestra with product xG; not duplicated in league list.
-    assert "xg-badge" in resp.text
-    assert ">78<" in resp.text or "78" in resp.text
+    # Clock-only board: no shot stats → no invented xG badge number.
     assert resp.text.count("fx-live") == 1
     assert "brand-xg" in resp.text
     assert "tag-short" in resp.text
@@ -196,19 +204,23 @@ def test_index_and_api_live_share_one_fixtures_live(monkeypatch) -> None:
     assert "live" in body and "live30_candidates" in body
     assert live_hits["n"] == 1
     live_by_id = {str(r["fixture_id"]): r for r in body["live"]}
-    assert live_by_id["fx-live"]["xg_score"] == 78
-    assert live_by_id["fx-live"]["xg_tone"] == "high"
+    # Fail-closed without shot stats.
+    assert live_by_id["fx-live"]["xg_score"] is None
     assert live_by_id["fx-early"]["xg_score"] is None
-    assert body["live30_candidates"][0]["xg_score"] == 78
+    assert body["live30_candidates"][0]["xg_score"] is None
     http.close()
 
 
 def test_board_xg_helper() -> None:
     from goal_xg.web.app import _board_xg, _xg_tone
 
-    assert _board_xg(
-        fixture_id="1", minute=30, period="1H", score_home=0, score_away=0
-    ) == 78
+    # Clock-only 0-0 → no shot stats → None (fail-closed).
+    assert (
+        _board_xg(
+            fixture_id="1", minute=30, period="1H", score_home=0, score_away=0
+        )
+        is None
+    )
     assert _xg_tone(78) == "high"
     assert (
         _board_xg(
