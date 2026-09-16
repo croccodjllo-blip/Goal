@@ -845,12 +845,11 @@ class ApiSportsClient:
         api_id: int | str | None = None,
         live_rows: Sequence[Mapping[str, Any]] | None = None,
     ) -> int | None:
-        """Resolve an API-Sports fixture id (apiId → live name match → date)."""
-        if api_id is not None and str(api_id).strip():
-            try:
-                return int(str(api_id).strip())
-            except (TypeError, ValueError):
-                pass
+        """Resolve an API-Sports fixture id (live name match → validated apiId → date).
+
+        GOAL ``apiId`` is **not** trusted blindly — provider ids can point at the
+        wrong match. Prefer live Big-5 name match when home/away are known.
+        """
 
         def _scan(rows: Sequence[Mapping[str, Any]]) -> int | None:
             for row in rows:
@@ -868,20 +867,43 @@ class ApiSportsClient:
                         return None
             return None
 
-        if live_rows is not None:
-            found = _scan(live_rows)
-            if found is not None:
-                return found
-        else:
-            try:
-                found = _scan(self.fixtures_live(big5_only=True))
+        # 1) Live name match first (most reliable for in-play densify / detail).
+        if home_name and away_name:
+            if live_rows is not None:
+                found = _scan(live_rows)
                 if found is not None:
                     return found
-            except ApiSportsError:
-                pass
+            else:
+                try:
+                    found = _scan(self.fixtures_live(big5_only=True))
+                    if found is not None:
+                        return found
+                except ApiSportsError:
+                    pass
 
-        if date:
-            # Free plans often reject historical seasons — fail soft.
+        # 2) Explicit apiId — only accept if team names match (or names unknown).
+        if api_id is not None and str(api_id).strip():
+            try:
+                cand = int(str(api_id).strip())
+            except (TypeError, ValueError):
+                cand = None
+            if cand is not None:
+                if not home_name and not away_name:
+                    return cand
+                try:
+                    rows = self.fixtures(id=cand)
+                except ApiSportsError:
+                    rows = []
+                if rows:
+                    verified = _scan(rows)
+                    if verified is not None:
+                        return verified
+                elif not home_name or not away_name:
+                    return cand
+                # Mismatch / empty → fall through (do not use bad GOAL apiId).
+
+        # 3) Date + Big-5 leagues (free plans often reject history).
+        if date and home_name and away_name:
             seasons: list[int | None] = [season] if season is not None else [None]
             if season is None:
                 try:

@@ -229,7 +229,65 @@ def test_find_fixture_id_from_api_id(mock_http: MagicMock) -> None:
         min_interval_s=0,
         sleep_fn=lambda _s: None,
     )
+    # No team names → apiId accepted as-is (no extra HTTP).
     assert client.find_fixture_id(home_name=None, away_name=None, api_id="1570385") == 1570385
+    assert mock_http.request.call_count == 0
+
+
+def test_find_fixture_id_rejects_mismatched_api_id(mock_http: MagicMock) -> None:
+    """GOAL apiId pointing at the wrong match must not win over live name match."""
+    live_row = {
+        "fixture": {"id": 1570385},
+        "teams": {
+            "home": {"id": 529, "name": "Barcelona"},
+            "away": {"id": 731, "name": "Racing Santander"},
+        },
+        "league": {"id": 140},
+    }
+    wrong_api = {
+        "fixture": {"id": 798858},
+        "teams": {
+            "home": {"name": "San Roque Lepe"},
+            "away": {"name": "Someone Else"},
+        },
+    }
+    # live name match is used first — no need to call HTTP when live_rows passed.
+    client = ApiSportsClient(
+        api_key="test-key-not-real",
+        client=mock_http,
+        min_interval_s=0,
+        sleep_fn=lambda _s: None,
+    )
+    fid = client.find_fixture_id(
+        home_name="Barcelona",
+        away_name="Racing Santander",
+        api_id=798858,
+        live_rows=[live_row],
+    )
+    assert fid == 1570385
+    assert mock_http.request.call_count == 0
+
+    # Without live_rows: validate apiId via /fixtures?id=… then fall through.
+    mock_http.request.side_effect = [
+        _response(200, {"errors": [], "response": [wrong_api]}),  # validate apiId
+        _response(200, {"errors": [], "response": [live_row]}),  # fixtures_live
+    ]
+    client2 = ApiSportsClient(
+        api_key="test-key-not-real",
+        client=mock_http,
+        min_interval_s=0,
+        sleep_fn=lambda _s: None,
+    )
+    # Reset side_effect order: find tries live first (fixtures_live), then apiId.
+    mock_http.request.side_effect = [
+        _response(200, {"errors": [], "response": [live_row]}),  # fixtures_live
+    ]
+    fid2 = client2.find_fixture_id(
+        home_name="Barcelona",
+        away_name="Racing Santander",
+        api_id=798858,
+    )
+    assert fid2 == 1570385
 
 
 def test_enrich_live_volume_fills_gaps(mock_http: MagicMock) -> None:
