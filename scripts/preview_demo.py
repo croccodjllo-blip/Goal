@@ -150,7 +150,7 @@ def _demo_board() -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict
 
 
 def _demo_score(card: dict[str, Any]) -> dict[str, Any]:
-    """Rich fixture score payload for the xG ring + breakdown."""
+    """Fixture score payload: shot-index components + live stats."""
     from goal_xg.live30.score import score_live30
     from goal_xg.live30.stats import LiveVolumeStats
     from goal_xg.live30.service import live30_score_to_dict
@@ -158,16 +158,24 @@ def _demo_score(card: dict[str, Any]) -> dict[str, Any]:
     stats = None
     if card.get("is_00") and card.get("in_window"):
         stats = LiveVolumeStats(
+            shots_total_home=6,
+            shots_total_away=4,
             sot_home=3,
             sot_away=2,
-            attacks_home=24,
-            attacks_away=18,
-            corners_home=3,
-            corners_away=1,
-            possession_home=58,
-            possession_away=42,
-            saves_home=1,
-            saves_away=2,
+            shot_xg_home=0.55,
+            shot_xg_away=0.32,
+            xgot_home=0.40,
+            xgot_away=0.22,
+            woodwork_home=1,
+            woodwork_away=0,
+            shots_off_home=2,
+            shots_off_away=1,
+            shots_blocked_home=1,
+            shots_blocked_away=1,
+            shots_inside_box_home=4,
+            shots_inside_box_away=2,
+            shots_outside_box_home=2,
+            shots_outside_box_away=2,
             def_yellows_home=1,
             def_yellows_away=0,
             subs_home=0,
@@ -183,6 +191,10 @@ def _demo_score(card: dict[str, Any]) -> dict[str, Any]:
         score_home=card.get("score_home"),
         score_away=card.get("score_away"),
         stats=stats,
+        extra_signals={
+            "goals_scored_last5_ha": 0.62,
+            "standings": 0.58,
+        },
     )
     data = live30_score_to_dict(result)
     notes = list(data.get("notes") or [])
@@ -190,26 +202,43 @@ def _demo_score(card: dict[str, Any]) -> dict[str, Any]:
     data["notes"] = notes
     if not data.get("features"):
         data["features"] = {
+            "shots_total": 10,
             "sot_total": 5,
-            "attacks_total": 42,
-            "corners_total": 4,
-            "possession_home": 58,
-            "saves_total": 3,
-            "def_yellows_total": 1,
-            "subs_total": 0,
+            "shot_xg_total": 0.87,
+            "xgot_total": 0.62,
+            "woodwork_total": 1,
+            "shots_off_total": 3,
+            "shots_blocked_total": 2,
+            "shots_inside_box_total": 6,
+            "shots_outside_box_total": 4,
             "source_half": "firstHalf",
-            "formation_home": "3-5-2",
-            "formation_away": "4-2-3-1",
         }
     if not data.get("signals"):
         data["signals"] = {
-            "pace": 0.62,
-            "pressure": 0.55,
-            "set_pieces": 0.48,
-            "goalkeeper": 0.41,
-            "discipline": 0.50,
-            "subs": 0.50,
-            "prematch": 0.52,
+            "shots_total": 0.60,
+            "sot": 0.55,
+            "shot_xg": 0.70,
+            "xgot": 0.65,
+            "woodwork": 0.45,
+            "shots_off": 0.40,
+            "shots_blocked": 0.40,
+            "shots_inside_box": 0.58,
+            "shots_outside_box": 0.42,
+            "goals_scored_last5_ha": 0.62,
+            "standings": 0.58,
+        }
+        data["weights_used"] = {
+            "shots_total": 9.0,
+            "sot": 13.0,
+            "shot_xg": 20.0,
+            "xgot": 16.0,
+            "woodwork": 6.0,
+            "shots_off": 6.0,
+            "shots_blocked": 6.0,
+            "shots_inside_box": 8.0,
+            "shots_outside_box": 6.0,
+            "goals_scored_last5_ha": 5.0,
+            "standings": 5.0,
         }
     return data
 

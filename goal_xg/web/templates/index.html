@@ -3,7 +3,7 @@
 {% block content %}
 <header class="board-head">
   <h1>Live Big-5</h1>
-  <p>Board live · priorità 0-0 tra 28′ e 32′ → indice prodotto xG.</p>
+  <p>Board schematica · 0-0 tra 28′–32′ → indice prodotto.</p>
 </header>
 
 {% if error %}
@@ -27,7 +27,6 @@
           <span>{{ c.score_away if c.score_away is not none else "–" }}</span>
         </span>
         <span class="status-col">
-          <span class="live-pill">Live</span>
           {% if c.xg_score is not none %}
           <span class="xg-badge {{ c.xg_tone }}" title="Indice prodotto xG">{{ c.xg_score }}</span>
           {% else %}
@@ -66,15 +65,14 @@
             <span>{{ c.score_away if c.score_away is not none else "–" }}</span>
           </span>
           <span class="status-col">
-            {% if c.minute is not none %}
-            <span class="live-pill">Live</span>
-            {% endif %}
             {% if c.xg_score is not none %}
             <span class="xg-badge {{ c.xg_tone }}" title="Indice prodotto xG">{{ c.xg_score }}</span>
             {% elif c.is_00 %}
             <span class="xg-badge">0-0</span>
             {% elif c.minute is none %}
             <span class="xg-badge">…</span>
+            {% else %}
+            <span class="live-pill">Live</span>
             {% endif %}
           </span>
         </a>

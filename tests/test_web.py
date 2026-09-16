@@ -57,13 +57,16 @@ def test_static_css(monkeypatch) -> None:
     assert ".live-pill" in resp.text
     assert ".xg-ring" in resp.text
     assert ":focus-visible" in resp.text
-    assert "--brand-accent" in resp.text
+    assert "--accent" in resp.text or "--brand-accent" in resp.text
     assert ".tag-short" in resp.text
     assert ".xg-badge.high" in resp.text
     assert ".components" in resp.text
     assert ".comp-row" in resp.text
+    assert ".comp-head" in resp.text
     assert "prefers-reduced-motion" in resp.text
-    assert "Outfit" in resp.text or "IBM Plex Sans" in resp.text
+    assert "IBM Plex Mono" in resp.text or "IBM Plex Sans" in resp.text
+    assert "radial-gradient" not in resp.text
+    assert "@keyframes rise-in" not in resp.text
 
 
 def test_fixture_without_key(monkeypatch) -> None:
