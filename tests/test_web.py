@@ -56,6 +56,10 @@ def test_static_css(monkeypatch) -> None:
     assert ".match-row" in resp.text
     assert ".live-pill" in resp.text
     assert ".xg-ring" in resp.text
+    assert ":focus-visible" in resp.text
+    assert "--brand-accent" in resp.text
+    assert ".tag-short" in resp.text
+    assert ".xg-badge.high" in resp.text
 
 
 def test_fixture_without_key(monkeypatch) -> None:
@@ -65,12 +69,12 @@ def test_fixture_without_key(monkeypatch) -> None:
     assert resp.status_code == 200
     assert "GOAL_API_KEY" in resp.text
     assert "xg-panel" not in resp.text or "mancante" in resp.text
+    assert 'style="margin:0' not in resp.text
+    assert "fixture-fallback" in resp.text
 
 
 def test_index_and_api_live_share_one_fixtures_live(monkeypatch) -> None:
     """Quota fix: index / api.live must not double-hit /fixtures/live."""
-    from typing import Any
-
     import httpx
 
     from goal_xg.clients.goal_api import GoalApiClient
@@ -90,7 +94,18 @@ def test_index_and_api_live_share_one_fixtures_live(monkeypatch) -> None:
                 "homeTeamName": "A",
                 "awayTeamName": "B",
                 "leagueName": "Serie A",
-            }
+            },
+            {
+                "id": "fx-early",
+                "matchElapsed": 12,
+                "matchPeriod": "FIRST_HALF",
+                "homeTeamScore": 0,
+                "awayTeamScore": 0,
+                "league": {"id": 135, "name": "Serie A"},
+                "homeTeamName": "C",
+                "awayTeamName": "D",
+                "leagueName": "Serie A",
+            },
         ],
     }
     leagues_body = {
@@ -135,6 +150,12 @@ def test_index_and_api_live_share_one_fixtures_live(monkeypatch) -> None:
     resp = client.get("/")
     assert resp.status_code == 200
     assert live_hits["n"] == 1
+    # Candidate in Finestra with product xG; not duplicated in league list.
+    assert "xg-badge" in resp.text
+    assert ">78<" in resp.text or "78" in resp.text
+    assert resp.text.count("fx-live") == 1
+    assert "brand-xg" in resp.text
+    assert "tag-short" in resp.text
 
     live_hits["n"] = 0
     resp = client.get("/api/live")
@@ -142,4 +163,30 @@ def test_index_and_api_live_share_one_fixtures_live(monkeypatch) -> None:
     body = resp.json()
     assert "live" in body and "live30_candidates" in body
     assert live_hits["n"] == 1
+    live_by_id = {str(r["fixture_id"]): r for r in body["live"]}
+    assert live_by_id["fx-live"]["xg_score"] == 78
+    assert live_by_id["fx-live"]["xg_tone"] == "high"
+    assert live_by_id["fx-early"]["xg_score"] is None
+    assert body["live30_candidates"][0]["xg_score"] == 78
     http.close()
+
+
+def test_board_xg_helper() -> None:
+    from goal_xg.web.app import _board_xg, _xg_tone
+
+    assert _board_xg(
+        fixture_id="1", minute=30, period="1H", score_home=0, score_away=0
+    ) == 78
+    assert _xg_tone(78) == "high"
+    assert (
+        _board_xg(
+            fixture_id="1", minute=12, period="1H", score_home=0, score_away=0
+        )
+        is None
+    )
+    assert (
+        _board_xg(
+            fixture_id="1", minute=30, period="1H", score_home=1, score_away=0
+        )
+        == 100
+    )

@@ -11,8 +11,15 @@
 </head>
 <body>
   <header class="top">
-    <a class="brand" href="/">Goal <span>xG</span></a>
-    <p class="tag">Over 0.5 · Big-5 · 28–32′</p>
+    <a class="brand" href="/" aria-label="Goal xG — home">
+      <span class="brand-mark" aria-hidden="true">G</span>
+      <span class="brand-word">Goal</span>
+      <span class="brand-xg">xG</span>
+    </a>
+    <p class="tag" title="Over 0.5 · Big-5 · 28–32′">
+      <span class="tag-full">Over 0.5 · Big-5 · 28–32′</span>
+      <span class="tag-short">O0.5 · 28–32′</span>
+    </p>
   </header>
   <main class="wrap">
     {% block content %}{% endblock %}

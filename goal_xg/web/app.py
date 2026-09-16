@@ -13,6 +13,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from goal_xg.clients.goal_api import GoalApiClient, GoalApiError, _as_league_id
+from goal_xg.live30.score import score_live30
 from goal_xg.live30.service import (
     list_live30_candidates,
     live30_score_to_dict,
@@ -82,34 +83,88 @@ def _big5_filter(client: GoalApiClient, rows: list[dict[str, Any]]) -> list[dict
     return out
 
 
+def _board_xg(
+    *,
+    fixture_id: Any,
+    minute: int | None,
+    period: str | None,
+    score_home: int | None,
+    score_away: int | None,
+) -> int | None:
+    """Product xG for list rows from clock/score only (no extra REST).
+
+    Available inside the live30 gate: densified detail still lands on
+    ``/fixtures/{id}``. Outside the window → ``None`` (do not invent).
+    """
+    if minute is None or score_home is None or score_away is None:
+        return None
+    result = score_live30(
+        fixture_id=fixture_id or "",
+        minute=minute,
+        period=period,
+        score_home=score_home,
+        score_away=score_away,
+    )
+    if result.skipped and not result.settled:
+        return None
+    return int(result.xg_score)
+
+
+def _xg_tone(xg: int | None) -> str:
+    if xg is None:
+        return ""
+    if xg >= 60:
+        return "high"
+    if xg >= 40:
+        return "mid"
+    return "low"
+
+
+def _attach_board_xg(card: dict[str, Any]) -> dict[str, Any]:
+    xg = _board_xg(
+        fixture_id=card.get("fixture_id"),
+        minute=card.get("minute"),
+        period=card.get("period"),
+        score_home=card.get("score_home"),
+        score_away=card.get("score_away"),
+    )
+    card["xg_score"] = xg
+    card["xg_tone"] = _xg_tone(xg)
+    return card
+
+
 def _row_card(row: dict[str, Any]) -> dict[str, Any]:
     state = live_row_to_state(row)
     if state is None:
-        return {
-            "fixture_id": str(row.get("id") or ""),
-            "home_name": row.get("homeTeamName") or "?",
-            "away_name": row.get("awayTeamName") or "?",
-            "league_name": row.get("leagueName") or "",
-            "minute": None,
-            "score_home": None,
-            "score_away": None,
-            "is_00": False,
-            "in_window": False,
-            "is_live30_candidate": False,
+        return _attach_board_xg(
+            {
+                "fixture_id": str(row.get("id") or ""),
+                "home_name": row.get("homeTeamName") or "?",
+                "away_name": row.get("awayTeamName") or "?",
+                "league_name": row.get("leagueName") or "",
+                "minute": None,
+                "score_home": None,
+                "score_away": None,
+                "is_00": False,
+                "in_window": False,
+                "is_live30_candidate": False,
+            }
+        )
+    return _attach_board_xg(
+        {
+            "fixture_id": state.fixture_id or "",
+            "home_name": state.home_name or "?",
+            "away_name": state.away_name or "?",
+            "league_name": state.league_name or "",
+            "minute": state.minute,
+            "period": state.period,
+            "score_home": state.home_score,
+            "score_away": state.away_score,
+            "is_00": state.is_00,
+            "in_window": state.in_live30_window,
+            "is_live30_candidate": state.is_live30_candidate,
         }
-    return {
-        "fixture_id": state.fixture_id or "",
-        "home_name": state.home_name or "?",
-        "away_name": state.away_name or "?",
-        "league_name": state.league_name or "",
-        "minute": state.minute,
-        "period": state.period,
-        "score_home": state.home_score,
-        "score_away": state.away_score,
-        "is_00": state.is_00,
-        "in_window": state.in_live30_window,
-        "is_live30_candidate": state.is_live30_candidate,
-    }
+    )
 
 
 _FEATURE_LABELS: dict[str, str] = {
@@ -137,11 +192,23 @@ _SIGNAL_LABELS: dict[str, str] = {
 }
 
 
-def _group_by_league(cards: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Preserve first-seen league order (SofaScore tournament blocks)."""
+def _group_by_league(
+    cards: list[dict[str, Any]],
+    *,
+    exclude_fixture_ids: set[str] | None = None,
+) -> list[dict[str, Any]]:
+    """Preserve first-seen league order (SofaScore tournament blocks).
+
+    When ``exclude_fixture_ids`` is set (Finestra candidates), those rows are
+    omitted from league groups to avoid duplicate cards.
+    """
+    skip = {str(x) for x in (exclude_fixture_ids or set()) if str(x)}
     order: list[str] = []
     buckets: dict[str, list[dict[str, Any]]] = {}
     for card in cards:
+        fid = str(card.get("fixture_id") or "")
+        if fid and fid in skip:
+            continue
         name = str(card.get("league_name") or "").strip() or "Big-5"
         if name not in buckets:
             buckets[name] = []
@@ -208,25 +275,35 @@ def create_app() -> FastAPI:
                 raw_live = _unwrap_live_rows(client)
                 rows = _big5_filter(client, raw_live)
                 live_cards = [_row_card(r) for r in rows]
-                candidates = list_live30_candidates(
-                    client,
-                    live_rows=raw_live,
-                    big5_only=True,
-                    require_00=True,
-                    in_window_only=True,
-                )
+                candidates = [
+                    _attach_board_xg(dict(c))
+                    for c in list_live30_candidates(
+                        client,
+                        live_rows=raw_live,
+                        big5_only=True,
+                        require_00=True,
+                        in_window_only=True,
+                    )
+                ]
             except GoalApiError as exc:
                 error = str(exc)
             finally:
                 client.close()
 
+        candidate_ids = {
+            str(c.get("fixture_id") or "")
+            for c in candidates
+            if c.get("fixture_id") is not None and str(c.get("fixture_id") or "")
+        }
         return _TEMPLATES.TemplateResponse(
             request,
             "index.html",
             {
                 "error": error,
                 "live_cards": live_cards,
-                "league_groups": _group_by_league(live_cards),
+                "league_groups": _group_by_league(
+                    live_cards, exclude_fixture_ids=candidate_ids
+                ),
                 "candidates": candidates,
                 "refresh_seconds": 30,
             },
@@ -298,13 +375,16 @@ def create_app() -> FastAPI:
             raw_live = _unwrap_live_rows(client)
             rows = _big5_filter(client, raw_live)
             cards = [_row_card(r) for r in rows]
-            candidates = list_live30_candidates(
-                client,
-                live_rows=raw_live,
-                big5_only=True,
-                require_00=True,
-                in_window_only=True,
-            )
+            candidates = [
+                _attach_board_xg(dict(c))
+                for c in list_live30_candidates(
+                    client,
+                    live_rows=raw_live,
+                    big5_only=True,
+                    require_00=True,
+                    in_window_only=True,
+                )
+            ]
             return JSONResponse({"live": cards, "live30_candidates": candidates})
         except GoalApiError as exc:
             raise HTTPException(status_code=502, detail=str(exc)) from exc

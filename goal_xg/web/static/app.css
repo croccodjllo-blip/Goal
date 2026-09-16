@@ -16,7 +16,11 @@
   --window-dim: rgba(255, 179, 0, 0.12);
   --waiting: #6b778c;
   --danger: #ef5350;
+  /* Product accent ≠ LIVE green (brand / xG badge) */
+  --brand-accent: #c9d3dd;
+  --brand-accent-dim: rgba(201, 211, 221, 0.16);
   --xg: #ffffff;
+  --xg-high: #c9d3dd;
   --xg-ring: #00c853;
   --xg-mid: #ffb300;
   --xg-low: #6b778c;
@@ -43,6 +47,13 @@ body {
 
 a { color: var(--text-secondary); text-decoration: none; }
 a:hover { color: var(--text); }
+a:focus-visible,
+button:focus-visible,
+.match-link:focus-visible,
+.brand:focus-visible {
+  outline: 2px solid var(--brand-accent);
+  outline-offset: 2px;
+}
 
 /* —— Sticky top bar —— */
 .top {
@@ -52,7 +63,7 @@ a:hover { color: var(--text); }
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.75rem;
+  gap: 0.5rem;
   min-height: var(--top-h);
   padding: 0.65rem 1rem;
   background: color-mix(in srgb, var(--bg-elevated) 92%, transparent);
@@ -62,28 +73,71 @@ a:hover { color: var(--text); }
 
 .brand {
   display: inline-flex;
-  align-items: baseline;
-  gap: 0.15rem;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+  flex-shrink: 0;
   font-family: var(--font-display);
-  font-size: 1.15rem;
+  font-size: 1.2rem;
   font-weight: 700;
   letter-spacing: -0.02em;
   color: var(--text);
   text-decoration: none;
+  border-radius: var(--radius-sm);
 }
 .brand:hover { color: var(--text); }
-.brand span {
-  color: var(--live);
+.brand-mark {
+  display: inline-grid;
+  place-items: center;
+  width: 1.55rem;
+  height: 1.55rem;
+  border-radius: 5px;
+  border: 1px solid color-mix(in srgb, var(--brand-accent) 55%, var(--border));
+  background: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--brand-accent) 22%, var(--surface)),
+    var(--surface-2)
+  );
+  color: var(--brand-accent);
+  font-size: 0.78rem;
   font-weight: 800;
+  letter-spacing: 0;
+  line-height: 1;
+}
+.brand-word {
+  color: var(--text);
+  font-weight: 800;
+}
+.brand-xg {
+  color: var(--brand-accent);
+  font-weight: 800;
+  letter-spacing: -0.03em;
 }
 
 .tag {
   margin: 0;
+  min-width: 0;
+  max-width: 55%;
   color: var(--muted);
   font-size: 0.72rem;
   text-transform: uppercase;
   letter-spacing: 0.06em;
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
+}
+.tag-full { display: none; }
+.tag-short { display: inline; }
+
+@media (min-width: 420px) {
+  .tag {
+    max-width: none;
+    overflow: visible;
+    text-overflow: unset;
+  }
+  .tag-full { display: inline; }
+  .tag-short { display: none; }
 }
 
 .wrap {
@@ -95,6 +149,7 @@ a:hover { color: var(--text); }
 /* —— Section headers —— */
 .board-head {
   padding: 0.85rem 1rem 0.5rem;
+  scroll-margin-top: calc(var(--top-h) + 0.5rem);
 }
 .board-head h1 {
   margin: 0;
@@ -184,6 +239,11 @@ a:hover { color: var(--text); }
 .match-link:hover {
   background: var(--surface-2);
   color: inherit;
+}
+.match-link:focus-visible {
+  background: var(--surface-2);
+  color: inherit;
+  border-radius: 0;
 }
 
 .minute-badge {
@@ -286,13 +346,19 @@ a:hover { color: var(--text); }
   font-variant-numeric: tabular-nums;
   color: var(--text-secondary);
 }
+/* High product xG uses chrome accent — not LIVE green */
 .xg-badge.high {
-  color: var(--live);
-  border-color: color-mix(in srgb, var(--live) 40%, var(--border));
+  color: var(--xg-high);
+  background: var(--brand-accent-dim);
+  border-color: color-mix(in srgb, var(--brand-accent) 45%, var(--border));
 }
 .xg-badge.mid {
   color: var(--window);
   border-color: color-mix(in srgb, var(--window) 40%, var(--border));
+}
+.xg-badge.low {
+  color: var(--waiting);
+  border-color: var(--border);
 }
 
 .empty {
@@ -331,6 +397,12 @@ a:hover { color: var(--text); }
   padding: 0.5rem 1rem 1rem;
   border-bottom: 1px solid var(--border);
   background: var(--bg-elevated);
+  scroll-margin-top: calc(var(--top-h) + 0.5rem);
+}
+.fixture-fallback {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 700;
 }
 .fixture-head .league {
   margin: 0 0 0.65rem;
@@ -375,12 +447,20 @@ a:hover { color: var(--text); }
 }
 .match-scoreboard .clock {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 0.35rem;
+  gap: 0.25rem;
   font-size: 0.8rem;
   font-weight: 700;
   color: var(--live);
   font-variant-numeric: tabular-nums;
+}
+.match-scoreboard .clock-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  flex-wrap: wrap;
+  justify-content: center;
 }
 
 /* —— Product xG panel —— */
@@ -502,6 +582,11 @@ a:hover { color: var(--text); }
   .team-name { font-size: 0.98rem; }
   .match-scoreboard .name { font-size: 1.1rem; }
   .match-scoreboard .score { font-size: 2.1rem; }
+  .match-scoreboard .clock {
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
   .xg-ring { width: 148px; height: 148px; }
   .xg-num { font-size: 3.1rem; }
 }

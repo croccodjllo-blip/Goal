@@ -21,11 +21,13 @@
       <div class="clock">
         {% if card.minute is not none %}
         <span class="live-pill">Live</span>
-        <span>{{ card.minute }}′</span>
+        <span class="clock-meta">
+          <span>{{ card.minute }}′</span>
+          {% if card.period %}<span class="muted">· {{ card.period }}</span>{% endif %}
+        </span>
         {% else %}
         <span>—</span>
         {% endif %}
-        {% if card.period %}<span class="muted">· {{ card.period }}</span>{% endif %}
       </div>
     </div>
     <div class="side away">
@@ -35,7 +37,7 @@
 </header>
 {% else %}
 <header class="fixture-head">
-  <h1 style="margin:0;font-size:1.1rem;">Fixture {{ fixture_id }}</h1>
+  <h1 class="fixture-fallback">Fixture {{ fixture_id }}</h1>
 </header>
 {% endif %}
 

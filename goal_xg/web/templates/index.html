@@ -28,7 +28,11 @@
         </span>
         <span class="status-col">
           <span class="live-pill">Live</span>
+          {% if c.xg_score is not none %}
+          <span class="xg-badge {{ c.xg_tone }}" title="Indice prodotto xG">{{ c.xg_score }}</span>
+          {% else %}
           <span class="window-pill">28–32′</span>
+          {% endif %}
         </span>
       </a>
     </li>
@@ -48,7 +52,7 @@
     </div>
     <ul class="match-list">
       {% for c in group.matches %}
-      <li class="match-row{% if c.is_live30_candidate %} hot{% endif %}">
+      <li class="match-row">
         <a class="match-link" href="/fixtures/{{ c.fixture_id }}">
           <span class="minute-badge{% if c.minute is none %} is-waiting{% endif %}">
             {% if c.minute is not none %}{{ c.minute }}′{% else %}—{% endif %}
@@ -64,13 +68,13 @@
           <span class="status-col">
             {% if c.minute is not none %}
             <span class="live-pill">Live</span>
-            {% else %}
-            <span class="xg-badge">…</span>
             {% endif %}
-            {% if c.in_window and c.is_00 %}
-            <span class="window-pill">@30′</span>
+            {% if c.xg_score is not none %}
+            <span class="xg-badge {{ c.xg_tone }}" title="Indice prodotto xG">{{ c.xg_score }}</span>
             {% elif c.is_00 %}
             <span class="xg-badge">0-0</span>
+            {% elif c.minute is none %}
+            <span class="xg-badge">…</span>
             {% endif %}
           </span>
         </a>
@@ -79,7 +83,7 @@
     </ul>
   </section>
   {% endfor %}
-{% else %}
+{% elif not live_cards %}
 <p class="empty">Nessuna partita live Big-5 (o API non raggiungibile).</p>
 {% endif %}
 {% endblock %}
