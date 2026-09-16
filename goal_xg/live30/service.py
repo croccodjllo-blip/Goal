@@ -10,6 +10,7 @@ from typing import Any, Mapping
 
 from goal_xg.clients.goal_api import GoalApiClient, _as_league_id
 from goal_xg.clients.goal_ws import LiveMatchState, parse_match_update
+from goal_xg.features.extractors import build_extra_signals
 from goal_xg.features.prematch import PrematchPriors, compute_prematch_priors
 from goal_xg.live30.score import Live30Score, score_live30
 from goal_xg.live30.stats import merge_events_into_stats, parse_statistics_payload
@@ -18,6 +19,11 @@ from goal_xg.live30.window import (
     is_score_00,
     normalize_period,
     parse_minute,
+)
+from goal_xg.model.calibration import (
+    DEFAULT_P_OVER05_GIVEN_00_AT_30,
+    League00At30Calib,
+    resolve_league_p,
 )
 
 
@@ -143,8 +149,13 @@ def list_live30_candidates(
     big5_only: bool = True,
     require_00: bool = True,
     in_window_only: bool = True,
+    live_rows: list[dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
-    """One REST ``/fixtures/live`` call; filter Big-5 / 0-0 / 28–32′.
+    """List Big-5 / 0-0 / 28–32′ candidates from live fixtures.
+
+    Pass ``live_rows`` to reuse an already-fetched ``/fixtures/live`` payload
+    (avoids a second REST hit on web refresh). When omitted, performs one
+    ``fixtures_live`` call.
 
     Does **not** fetch statistics (budget). Use :func:`score_fixture_live30`
     per candidate when ready to densify.
@@ -153,8 +164,11 @@ def list_live30_candidates(
     if big5_only:
         big5_ids = {lg.league_id for lg in client.discover_big5_leagues()}
 
-    payload = client.fixtures_live()
-    rows = _unwrap_list(payload)
+    if live_rows is not None:
+        rows = [r for r in live_rows if isinstance(r, dict)]
+    else:
+        payload = client.fixtures_live()
+        rows = _unwrap_list(payload)
     out: list[dict[str, Any]] = []
     for row in rows:
         if big5_only and big5_ids:
@@ -209,13 +223,19 @@ def score_fixture_live30(
     fetch_history: bool = True,
     season: int | None = None,
     fetch_lineups: bool = True,
+    fetch_standings: bool = True,
+    fetch_h2h: bool = True,
     weather_signal: float | None = None,
+    league_calib: Mapping[str, League00At30Calib] | None = None,
 ) -> Live30Score:
     """Score one fixture. REST stats only if gate says 0-0 in window (or settled).
 
     Clock source preference:
     1. ``clock_override`` (from WS ``match_update`` — preferred, no REST)
     2. ``GET /fixtures/:id`` (1 REST)
+
+    When densifying, also builds ``extra_signals`` (form, streaks, …) from
+    history / standings / H2H when available; missing terms omit + renorm.
     """
     state: LiveMatchState | None = None
     if isinstance(clock_override, LiveMatchState):
@@ -302,21 +322,70 @@ def score_fixture_live30(
     )
 
     priors: PrematchPriors | None = None
-    if fetch_history:
-        hid, aid = _extract_team_ids(fixture_row)
-        league = fixture_row.get("league") if isinstance(fixture_row.get("league"), dict) else {}
-        league_id = league.get("id") or fixture_row.get("leagueId")
-        if hid is not None and aid is not None and league_id is not None:
-            try:
-                hist = client.fixtures_by_league(league_id, season=season, status="FT")
-                priors = compute_prematch_priors(
-                    home_team_id=hid,
-                    away_team_id=aid,
-                    finished=_unwrap_list(hist),
-                    fixture_id=fixture_id,
-                )
-            except Exception:
-                priors = None
+    extra_signals: dict[str, float] | None = None
+    fatigue_flag = False
+
+    hid, aid = _extract_team_ids(fixture_row)
+    league = fixture_row.get("league") if isinstance(fixture_row.get("league"), dict) else {}
+    league_id = league.get("id") or fixture_row.get("leagueId") or fixture_row.get("league_id")
+    kickoff = (
+        fixture_row.get("starting_at")
+        or fixture_row.get("startingAt")
+        or fixture_row.get("date")
+        or fixture_row.get("kickoff")
+    )
+
+    hist_rows: list[dict[str, Any]] = []
+    if fetch_history and hid is not None and aid is not None and league_id is not None:
+        try:
+            hist = client.fixtures_by_league(league_id, season=season, status="FT")
+            hist_rows = _unwrap_list(hist)
+            priors = compute_prematch_priors(
+                home_team_id=hid,
+                away_team_id=aid,
+                finished=hist_rows,
+                fixture_id=fixture_id,
+            )
+        except Exception:
+            priors = None
+            hist_rows = []
+
+    standings_payload: Any = None
+    if fetch_standings and league_id is not None:
+        try:
+            standings_payload = client.league_standings(league_id, season=season)
+        except Exception:
+            standings_payload = None
+
+    h2h_rows: list[dict[str, Any]] = []
+    if fetch_h2h and hid is not None and aid is not None:
+        try:
+            h2h_payload = client.h2h(hid, aid)
+            h2h_rows = _unwrap_list(h2h_payload)
+        except Exception:
+            h2h_rows = []
+
+    if hid is not None and aid is not None:
+        baseline = priors.league_pct_over05 if priors is not None else 0.92
+        built = build_extra_signals(
+            home_team_id=hid,
+            away_team_id=aid,
+            finished=hist_rows or None,
+            h2h_rows=h2h_rows or None,
+            standings_payload=standings_payload,
+            kickoff=kickoff,
+            league_baseline=baseline,
+        )
+        if built.signals:
+            extra_signals = built.signals
+        fatigue_flag = built.fatigue_flag
+
+    league_p = resolve_league_p(
+        league_calib,
+        league_id,
+        prior=DEFAULT_P_OVER05_GIVEN_00_AT_30,
+        allow_prior_fallback=True,
+    )
 
     return score_live30(
         fixture_id=fixture_id,
@@ -326,7 +395,10 @@ def score_fixture_live30(
         score_away=away,
         stats=stats,
         priors=priors,
+        extra_signals=extra_signals,
+        league_p_over05_given_00=league_p,
         weather_signal=weather_signal,
+        fatigue_flag=fatigue_flag,
     )
 
 

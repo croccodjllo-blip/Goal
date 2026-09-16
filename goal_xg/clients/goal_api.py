@@ -418,3 +418,28 @@ class GoalApiClient:
 
     def fixture_substitutions(self, fixture_id: int | str) -> Any:
         return self.get(f"/fixtures/{fixture_id}/substitutions")
+
+    def league_standings(
+        self,
+        league_id: int | str,
+        *,
+        season: int | None = None,
+    ) -> Any:
+        """``GET /standings`` — table for incentive / rank-gap signals."""
+        params: dict[str, Any] = {"league": league_id, "leagueId": league_id}
+        if season is not None:
+            params["season"] = season
+        return self.get("/standings", **params)
+
+    def h2h(
+        self,
+        team1_id: int | str,
+        team2_id: int | str,
+        *,
+        last: int | None = 10,
+    ) -> Any:
+        """``GET /h2h/:team1/:team2`` — club head-to-head fixtures."""
+        params: dict[str, Any] = {}
+        if last is not None:
+            params["last"] = last
+        return self.get(f"/h2h/{team1_id}/{team2_id}", **params)

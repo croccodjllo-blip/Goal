@@ -104,8 +104,10 @@ goal-xg coach --team-id 86
 ```text
 goal_xg/
   clients/          # GOAL REST/WS + football-data.org
+  features/         # prematch priors + extractors (form/streaks/…)
   live30/           # Phase B window / stats / score / service
-  model/            # weights + dynamic shifts + xG
+  model/            # weights + dynamic shifts + calibration + xG
+  backtest/         # historical 0-0@30′ harness (Brier / reliability)
   web/              # FastAPI + Jinja templates + static
   cli.py
 ```
@@ -116,9 +118,22 @@ goal_xg/
 PYTHONPATH=. pytest -q
 ```
 
+## Backtest (0-0 @ 30′ → FT)
+
+Offline harness with Brier / log-loss / reliability bins (mocks or JSONL):
+
+```bash
+# sample fixture shipped in tests/
+python -m goal_xg.backtest tests/fixtures/backtest_sample.jsonl
+# predictions-only JSONL rows with p_hat + y_over05:
+python -m goal_xg.backtest path/to/preds.jsonl --predictions-only
+```
+
+See `goal_xg/backtest/` and `tests/test_backtest.py`.
+
 ## Phase status
 
-- **A:** pre-match priors + CLI.
-- **B:** WS + live30 scoring + CLI.
-- **Web:** FastAPI dashboard for live Big-5 / live30 xG.
-- **Still omitted:** coach-vs-coach H2H; live player ratings.
+- **A:** pre-match priors + extractors (form, streaks, …) + CLI.
+- **B:** WS + live30 scoring + league calib hook + CLI.
+- **Web:** FastAPI dashboard — **one** `/fixtures/live` per refresh (quota fix).
+- **Still omitted:** coach-vs-coach H2H; live player ratings; Open-Meteo; VPS deploy.

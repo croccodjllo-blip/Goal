@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "goal-xg"
-version = "0.3.0"
+version = "0.4.0"
 description = "Over 0.5 FT product-xG (0–100) Big-5: GOAL REST+WS + FastAPI live UI"
 readme = "README.md"
 requires-python = ">=3.11"

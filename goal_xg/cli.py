@@ -15,6 +15,7 @@ from dotenv import load_dotenv
 from goal_xg.clients.football_data import FootballDataClient, FootballDataError
 from goal_xg.clients.goal_api import GoalApiClient, GoalApiError, _as_league_id
 from goal_xg.clients.goal_ws import GoalWsClient
+from goal_xg.features.extractors import build_extra_signals
 from goal_xg.features.prematch import FinishedFixture, compute_prematch_priors
 from goal_xg.live30.service import (
     list_live30_candidates,
@@ -212,6 +213,26 @@ def score_prematch_cmd(
                 hist = client.fixtures_by_league(league_id, season=season, status="FT")
                 finished_raw = _normalize_fixtures_list(hist)
 
+            standings_payload: Any = None
+            h2h_rows: list[Any] = []
+            kickoff = None
+            if isinstance(fixture_row, dict):
+                kickoff = (
+                    fixture_row.get("starting_at")
+                    or fixture_row.get("startingAt")
+                    or fixture_row.get("date")
+                    or fixture_row.get("kickoff")
+                )
+            if league_id is not None:
+                try:
+                    standings_payload = client.league_standings(league_id, season=season)
+                except GoalApiError:
+                    standings_payload = None
+            try:
+                h2h_rows = _normalize_fixtures_list(client.h2h(home_id, away_id))
+            except GoalApiError:
+                h2h_rows = []
+
             priors = compute_prematch_priors(
                 home_team_id=home_id,
                 away_team_id=away_id,
@@ -219,7 +240,20 @@ def score_prematch_cmd(
                 fixture_id=fixture_id,
                 shrink_k=shrink_k,
             )
-            result = score_prematch(priors, fixture_id=fixture_id)
+            extras = build_extra_signals(
+                home_team_id=home_id,
+                away_team_id=away_id,
+                finished=finished_raw,
+                h2h_rows=h2h_rows,
+                standings_payload=standings_payload,
+                kickoff=kickoff,
+                league_baseline=priors.league_pct_over05,
+            )
+            result = score_prematch(
+                priors,
+                fixture_id=fixture_id,
+                extra_signals=extras.signals or None,
+            )
             _dump(
                 {
                     "fixture_id": result.fixture_id,
@@ -229,6 +263,8 @@ def score_prematch_cmd(
                     "xg_score": result.xg_score,
                     "weights_used": dict(result.weights_used),
                     "features": dict(result.features),
+                    "extra_signals": dict(extras.signals),
+                    "extra_omit_notes": list(extras.notes),
                     "notes": list(result.notes),
                     "history_n": len(finished_raw),
                     "rate_limit": None

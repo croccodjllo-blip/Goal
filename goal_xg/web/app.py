@@ -174,7 +174,7 @@ def _feature_rows(score: dict[str, Any] | None) -> list[dict[str, str]]:
 
 
 def create_app() -> FastAPI:
-    app = FastAPI(title="Goal xG", version="0.3.0", docs_url="/docs")
+    app = FastAPI(title="Goal xG", version="0.4.0", docs_url="/docs")
     app.mount("/static", StaticFiles(directory=str(_WEB_DIR / "static")), name="static")
 
     @app.get("/health")
@@ -188,7 +188,7 @@ def create_app() -> FastAPI:
         return {
             "ok": True,
             "service": "goal-xg",
-            "version": "0.3.0",
+            "version": "0.4.0",
             "goal_api_key_configured": goal_key,
             "football_data_configured": fd_key,
         }
@@ -204,10 +204,16 @@ def create_app() -> FastAPI:
             error = "GOAL_API_KEY mancante. Imposta la key nel file .env (solo server)."
         else:
             try:
-                rows = _big5_filter(client, _unwrap_live_rows(client))
+                # One /fixtures/live fetch shared by board + live30 candidates (quota).
+                raw_live = _unwrap_live_rows(client)
+                rows = _big5_filter(client, raw_live)
                 live_cards = [_row_card(r) for r in rows]
                 candidates = list_live30_candidates(
-                    client, big5_only=True, require_00=True, in_window_only=True
+                    client,
+                    live_rows=raw_live,
+                    big5_only=True,
+                    require_00=True,
+                    in_window_only=True,
                 )
             except GoalApiError as exc:
                 error = str(exc)
@@ -288,9 +294,17 @@ def create_app() -> FastAPI:
         if client is None:
             raise HTTPException(status_code=503, detail="GOAL_API_KEY missing")
         try:
-            rows = _big5_filter(client, _unwrap_live_rows(client))
+            # Single /fixtures/live for both board cards and candidates.
+            raw_live = _unwrap_live_rows(client)
+            rows = _big5_filter(client, raw_live)
             cards = [_row_card(r) for r in rows]
-            candidates = list_live30_candidates(client)
+            candidates = list_live30_candidates(
+                client,
+                live_rows=raw_live,
+                big5_only=True,
+                require_00=True,
+                in_window_only=True,
+            )
             return JSONResponse({"live": cards, "live30_candidates": candidates})
         except GoalApiError as exc:
             raise HTTPException(status_code=502, detail=str(exc)) from exc

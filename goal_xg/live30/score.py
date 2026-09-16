@@ -21,13 +21,10 @@ from goal_xg.live30.window import (
     normalize_period,
     parse_minute,
 )
+from goal_xg.model.calibration import DEFAULT_P_OVER05_GIVEN_00_AT_30
 from goal_xg.model.dynamic_weights import apply_event_shifts, event_shift_deltas
 from goal_xg.model.over05 import xg_score_from_p
 from goal_xg.model.weights import MVP_OMIT_TERMS, omit_and_renorm
-
-# Big-5 empirical-ish P(Over 0.5 FT | 0-0 @ 30′) prior when no league calib.
-DEFAULT_P_OVER05_GIVEN_00_AT_30 = 0.78
-
 
 @dataclass(frozen=True)
 class Live30Snapshot:
