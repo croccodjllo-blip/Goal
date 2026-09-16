@@ -12,6 +12,8 @@ def test_health_ok(monkeypatch) -> None:
     monkeypatch.delenv("GOAL_API_KEY", raising=False)
     monkeypatch.delenv("FOOTBALL_DATA_API_KEY", raising=False)
     monkeypatch.delenv("FOOTBALL_DATA_TOKEN", raising=False)
+    monkeypatch.delenv("API_SPORTS_KEY", raising=False)
+    monkeypatch.delenv("APISPORTS_KEY", raising=False)
     client = TestClient(create_app())
     resp = client.get("/health")
     assert resp.status_code == 200
@@ -20,13 +22,16 @@ def test_health_ok(monkeypatch) -> None:
     assert body["service"] == "goal-xg"
     assert body["goal_api_key_configured"] is False
     assert body["football_data_configured"] is False
+    assert body["api_sports_configured"] is False
 
 
 def test_health_reports_key(monkeypatch) -> None:
     monkeypatch.setenv("GOAL_API_KEY", "test-key-not-real")
+    monkeypatch.setenv("API_SPORTS_KEY", "test-apisports-not-real")
     client = TestClient(create_app())
     body = client.get("/health").json()
     assert body["goal_api_key_configured"] is True
+    assert body["api_sports_configured"] is True
 
 
 def test_index_without_key_shows_alert(monkeypatch) -> None:

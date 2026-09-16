@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from typing import Any, Mapping
 
+from goal_xg.clients.api_sports import ApiSportsClient, maybe_client as maybe_api_sports
 from goal_xg.clients.goal_api import GoalApiClient, _as_league_id
 from goal_xg.clients.goal_ws import LiveMatchState, parse_match_update
 from goal_xg.features.extractors import build_extra_signals
@@ -215,6 +216,76 @@ def _extract_team_ids(fixture_row: Mapping[str, Any]) -> tuple[str | None, str |
     )
 
 
+def _extract_kickoff_date(fixture_row: Mapping[str, Any]) -> str | None:
+    kickoff = (
+        fixture_row.get("starting_at")
+        or fixture_row.get("startingAt")
+        or fixture_row.get("date")
+        or fixture_row.get("kickoff")
+    )
+    if kickoff is None:
+        return None
+    text = str(kickoff).strip()
+    if not text:
+        return None
+    # ISO timestamps → YYYY-MM-DD
+    return text[:10] if len(text) >= 10 else text
+
+
+def _extract_api_sports_id(fixture_row: Mapping[str, Any], state: LiveMatchState | None) -> str | None:
+    if state is not None and state.provider_match_id:
+        return state.provider_match_id
+    for key in ("apiId", "api_id", "providerId", "provider_id"):
+        val = fixture_row.get(key)
+        if val is not None and str(val).strip():
+            return str(val).strip()
+    return None
+
+
+def _enrich_stats_from_api_sports(
+    stats: Any,
+    fixture_row: Mapping[str, Any],
+    state: LiveMatchState | None,
+    *,
+    api_sports: ApiSportsClient | None = None,
+) -> Any:
+    """Optionally fill missing shot fields via API-Sports (no-op if unconfigured)."""
+    client = api_sports
+    owns = False
+    if client is None:
+        client = maybe_api_sports()
+        owns = client is not None
+    if client is None:
+        return stats
+    try:
+        home_name = (
+            (state.home_name if state else None)
+            or (fixture_row.get("homeTeamName"))
+        )
+        away_name = (
+            (state.away_name if state else None)
+            or (fixture_row.get("awayTeamName"))
+        )
+        teams = fixture_row.get("teams") if isinstance(fixture_row.get("teams"), dict) else {}
+        home_t = teams.get("home") if isinstance(teams.get("home"), dict) else {}
+        away_t = teams.get("away") if isinstance(teams.get("away"), dict) else {}
+        home_name = home_name or home_t.get("name")
+        away_name = away_name or away_t.get("name")
+        return client.enrich_live_volume(
+            stats,
+            home_name=str(home_name) if home_name else None,
+            away_name=str(away_name) if away_name else None,
+            date=_extract_kickoff_date(fixture_row),
+            api_id=_extract_api_sports_id(fixture_row, state),
+            prefer_half=True,
+        )
+    except Exception:
+        return stats
+    finally:
+        if owns and client is not None:
+            client.close()
+
+
 def score_fixture_live30(
     client: GoalApiClient,
     fixture_id: int | str,
@@ -227,6 +298,8 @@ def score_fixture_live30(
     fetch_h2h: bool = True,
     weather_signal: float | None = None,
     league_calib: Mapping[str, League00At30Calib] | None = None,
+    api_sports: ApiSportsClient | None = None,
+    enrich_api_sports: bool = True,
 ) -> Live30Score:
     """Score one fixture. REST stats only if gate says 0-0 in window (or settled).
 
@@ -236,6 +309,9 @@ def score_fixture_live30(
 
     When densifying, also builds ``extra_signals`` (form, streaks, …) from
     history / standings / H2H when available; missing terms omit + renorm.
+
+    When ``enrich_api_sports`` and a key is configured, API-Sports fills only
+    missing shot-index fields (never overwrites GOAL values).
     """
     state: LiveMatchState | None = None
     if isinstance(clock_override, LiveMatchState):
@@ -279,6 +355,10 @@ def score_fixture_live30(
     # never invent index signals (score stays 100 settled).
     stats_payload = client.fixture_statistics(fixture_id, half="1half")
     stats = parse_statistics_payload(stats_payload)
+    if enrich_api_sports:
+        stats = _enrich_stats_from_api_sports(
+            stats, fixture_row, state, api_sports=api_sports
+        )
 
     cards: list[Any] | None = None
     subs: Any = None

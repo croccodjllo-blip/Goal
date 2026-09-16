@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Any, Mapping, Sequence
+from dataclasses import dataclass
 
 
 @dataclass(frozen=True)
@@ -315,6 +315,60 @@ def parse_statistics_payload(payload: Any) -> LiveVolumeStats:
         source_half=half_label,
         notes=tuple(notes),
     )
+
+
+def merge_fill_shot_stats(
+    primary: LiveVolumeStats,
+    enrich: LiveVolumeStats | None,
+) -> LiveVolumeStats:
+    """Fill ``None`` shot-index fields from ``enrich``; never overwrite primary.
+
+    Used when API-Sports (or another secondary feed) densifies gaps left by GOAL.
+    Missing fields stay ``None`` → omit + renorm upstream.
+    """
+    if enrich is None:
+        return primary
+    from dataclasses import replace
+
+    shot_fields = (
+        "shots_total_home",
+        "shots_total_away",
+        "sot_home",
+        "sot_away",
+        "shot_xg_home",
+        "shot_xg_away",
+        "xgot_home",
+        "xgot_away",
+        "woodwork_home",
+        "woodwork_away",
+        "shots_off_home",
+        "shots_off_away",
+        "shots_blocked_home",
+        "shots_blocked_away",
+        "shots_inside_box_home",
+        "shots_inside_box_away",
+        "shots_outside_box_home",
+        "shots_outside_box_away",
+    )
+    updates: dict[str, Any] = {}
+    for name in shot_fields:
+        cur = getattr(primary, name)
+        alt = getattr(enrich, name, None)
+        if cur is None and alt is not None:
+            updates[name] = alt
+    if not updates:
+        return primary
+    notes = tuple(
+        dict.fromkeys([*primary.notes, *enrich.notes, "filled_from_secondary"])
+    )
+    source = primary.source_half or enrich.source_half
+    if (
+        primary.source_half
+        and enrich.source_half
+        and primary.source_half != enrich.source_half
+    ):
+        source = f"{primary.source_half}+{enrich.source_half}"
+    return replace(primary, source_half=source, notes=notes, **updates)
 
 
 def merge_events_into_stats(

@@ -465,7 +465,7 @@ def _settled_snapshot_rows(score: dict[str, Any] | None) -> list[dict[str, str]]
 
 
 def create_app() -> FastAPI:
-    app = FastAPI(title="Goal xG", version="0.4.3", docs_url="/docs")
+    app = FastAPI(title="Goal xG", version="0.4.4", docs_url="/docs")
     app.mount("/static", StaticFiles(directory=str(_WEB_DIR / "static")), name="static")
 
     @app.get("/health")
@@ -476,12 +476,17 @@ def create_app() -> FastAPI:
             os.environ.get("FOOTBALL_DATA_API_KEY", "").strip()
             or os.environ.get("FOOTBALL_DATA_TOKEN", "").strip()
         )
+        api_sports_key = bool(
+            os.environ.get("API_SPORTS_KEY", "").strip()
+            or os.environ.get("APISPORTS_KEY", "").strip()
+        )
         return {
             "ok": True,
             "service": "goal-xg",
-            "version": "0.4.3",
+            "version": "0.4.4",
             "goal_api_key_configured": goal_key,
             "football_data_configured": fd_key,
+            "api_sports_configured": api_sports_key,
         }
 
     @app.get("/", response_class=HTMLResponse)

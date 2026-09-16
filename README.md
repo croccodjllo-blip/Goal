@@ -9,6 +9,7 @@ Lean typed Python package for Alessandro’s **Over 0.5 FT** product index **xG 
 |-------|--------|------|
 | Live clock / score / events | `goal_xg/clients/goal_ws.py` | WebSocket (`wss://api.goal-api.com/ws`) |
 | Fixtures / statistics / history | `goal_xg/clients/goal_api.py` | REST — stats densified **only** on 0-0 in 28–32′ |
+| Shot-stat **enrichment** | `goal_xg/clients/api_sports.py` | API-Sports v3 — fills missing tiri/SoT/xG/… |
 | Coach **identity** (name / id) | `goal_xg/clients/football_data.py` | Soft feature; not H2H |
 | Weather (optional) | Open-Meteo | Fail-closed omit + renorm if missing |
 
@@ -17,6 +18,7 @@ Auth (env only — **never commit**):
 | Variable | Required | Notes |
 |----------|----------|-------|
 | `GOAL_API_KEY` | Yes (live/CLI/web data) | Bearer for GOAL REST + WS |
+| `API_SPORTS_KEY` or `APISPORTS_KEY` | Optional | API-Football v3 enrich (`x-apisports-key`) |
 | `FOOTBALL_DATA_API_KEY` or `FOOTBALL_DATA_TOKEN` | Optional | football-data.org coach identity |
 
 ## Locked product rules
@@ -27,8 +29,8 @@ Auth (env only — **never commit**):
 | Live trigger | ≈30′ 1H, still **0-0** (window **28–32′**) |
 | Score | Product xG 0–100 = `round(100 × P(Over 0.5 FT \| 0-0 @ 30′))` |
 | Leagues | Big-5 only |
-| Football | **GOAL API only** (REST + WS) |
-| MVP omit + renorm | `live_ratings`, `coach_h2h` |
+| Football | **GOAL API** primary (REST + WS); **API-Sports** fills shot gaps |
+| MVP omit + renorm | `live_ratings`, `coach_h2h`; missing shot fields omit + renorm |
 
 ## Setup
 

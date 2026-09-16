@@ -21,6 +21,7 @@ from goal_xg.live30.stats import (
     LiveVolumeStats,
     formation_shift_label,
     merge_events_into_stats,
+    merge_fill_shot_stats,
     parse_statistics_payload,
 )
 from goal_xg.live30.window import (
@@ -45,6 +46,7 @@ __all__ = [
     "in_live30_window",
     "is_score_00",
     "merge_events_into_stats",
+    "merge_fill_shot_stats",
     "normalize_period",
     "parse_minute",
     "parse_statistics_payload",
