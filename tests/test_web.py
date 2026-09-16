@@ -36,7 +36,7 @@ def test_index_without_key_shows_alert(monkeypatch) -> None:
     assert "text/html" in resp.headers["content-type"]
     assert "GOAL_API_KEY" in resp.text
     assert "Live Big-5" in resp.text
-    assert "In programma" in resp.text
+    assert "Partite in programma oggi" in resp.text
     assert "league-group" in resp.text or "match-list" in resp.text or "empty" in resp.text
     assert "Goal" in resp.text and "xG" in resp.text
 
@@ -161,9 +161,9 @@ def test_filter_live_00_drops_scored() -> None:
 
 def test_list_scheduled_big5_orders_and_fail_closed(monkeypatch) -> None:
     import httpx
+    import tempfile
 
     from goal_xg.clients.goal_api import GoalApiClient
-    from goal_xg.web import app as webapp
     from goal_xg.web.app import clear_schedule_cache, list_scheduled_big5
 
     clear_schedule_cache()
@@ -178,54 +178,49 @@ def test_list_scheduled_big5_orders_and_fail_closed(monkeypatch) -> None:
         ],
     }
     by_league = {
-        "pl1": [
-            {
-                "id": "fx-late",
-                "matchStatus": "SCHEDULED",
-                "kickoffUtc": "2026-09-20T15:00:00.000Z",
-                "homeTeamName": "Arsenal",
-                "awayTeamName": "Leeds",
-                "leagueName": "Premier League",
-                "leagueId": "pl1",
-            },
-            {
-                "id": "fx-soon",
-                "matchStatus": "SCHEDULED",
-                "kickoffUtc": "2026-09-17T18:00:00.000Z",
-                "homeTeamName": "Chelsea",
-                "awayTeamName": "Brentford",
-                "leagueName": "Premier League",
-                "leagueId": "pl1",
-            },
-            {
-                "id": "fx-live-status",
-                "matchStatus": "LIVE",
-                "kickoffUtc": "2026-09-16T18:00:00.000Z",
-                "homeTeamName": "X",
-                "awayTeamName": "Y",
-                "leagueName": "Premier League",
-                "leagueId": "pl1",
-            },
-        ],
         "pd1": [
+            {
+                "id": "fx-live",
+                "matchStatus": "LIVE",
+                "matchLive": "1",
+                "matchDate": "2026-09-16",
+                "matchTime": "17:00",
+                "kickoffUtc": "2026-09-16T15:00:00.000Z",
+                "homeTeamName": "Atl. Madrid",
+                "awayTeamName": "Osasuna",
+                "leagueName": "La Liga",
+                "leagueId": "pd1",
+                "homeTeamScore": 4,
+                "awayTeamScore": 0,
+                "matchElapsed": 90,
+            },
             {
                 "id": "fx-liga",
                 "matchStatus": "SCHEDULED",
-                "kickoffUtc": "2026-09-16T19:30:00.000Z",
+                "matchDate": "2026-09-16",
+                "matchTime": "19:30",
+                "kickoffUtc": "2026-09-16T17:30:00.000Z",
                 "homeTeamName": "Levante",
                 "awayTeamName": "Ath Bilbao",
                 "leagueName": "La Liga",
                 "leagueId": "pd1",
-            }
+            },
         ],
+        "pl1": [],
+        "sa1": [],
+        "bl1": [],
+        "fl1": [],
     }
+    hits: list[dict[str, str]] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
         path = request.url.path
         if path.endswith("/leagues"):
             return httpx.Response(200, json=leagues_body)
         if path.endswith("/fixtures"):
-            lid = request.url.params.get("leagueId") or request.url.params.get("league")
+            q = dict(request.url.params)
+            hits.append(q)
+            lid = q.get("leagueId") or q.get("league")
             return httpx.Response(
                 200, json={"success": True, "data": by_league.get(str(lid), [])}
             )
@@ -240,19 +235,22 @@ def test_list_scheduled_big5_orders_and_fail_closed(monkeypatch) -> None:
     client = GoalApiClient(
         api_key="test-key-not-real",
         client=http,
-        cache_dir="/tmp/goal-xg-sched-cache",
+        cache_dir=tempfile.mkdtemp(prefix="goal-xg-sched-"),
     )
-    from datetime import datetime, timezone
 
     cards = list_scheduled_big5(
         client,
-        now=datetime(2026, 9, 16, 18, 0, tzinfo=timezone.utc),
+        day="2026-09-16",
         use_cache=False,
     )
-    assert [c["fixture_id"] for c in cards] == ["fx-liga", "fx-soon", "fx-late"]
-    assert cards[0]["league_name"] == "La Liga"
-    assert "kickoff_label" in cards[0]
-    assert "fx-live-status" not in {c["fixture_id"] for c in cards}
+    assert len(hits) == 5
+    assert all(h.get("from") == "2026-09-16" and h.get("to") == "2026-09-16" for h in hits)
+    by_id = {c["fixture_id"]: c for c in cards}
+    assert set(by_id) == {"fx-live", "fx-liga"}
+    assert by_id["fx-liga"]["status"] == "scheduled"
+    assert by_id["fx-liga"]["kickoff_time"] == "19:30"
+    assert by_id["fx-live"]["status"] == "live"
+    assert by_id["fx-live"]["is_00"] is False
     http.close()
     clear_schedule_cache()
 
@@ -368,11 +366,12 @@ def test_index_and_api_live_share_one_fixtures_live(monkeypatch) -> None:
     resp = client.get("/")
     assert resp.status_code == 200
     assert live_hits["n"] == 1
-    assert fixtures_hits["n"] == 5  # one SCHEDULED fetch per Big-5 league
-    # Clock-only board: no shot stats → no invented xG badge number.
-    assert resp.text.count("fx-live") == 1
+    assert fixtures_hits["n"] == 5  # one from/to fetch per Big-5 league
+    # Focus + Finestra both reference the in-window 0-0.
+    assert resp.text.count("fx-live") >= 1
     assert "fx-scored" not in resp.text  # dropped when no longer 0-0
-    assert "In programma" in resp.text
+    assert "Partite in programma oggi" in resp.text
+    assert "Focus" in resp.text
     assert "fx-sched" in resp.text
     assert "Solo 0-0" in resp.text
     assert "brand-xg" in resp.text
@@ -384,6 +383,7 @@ def test_index_and_api_live_share_one_fixtures_live(monkeypatch) -> None:
     assert resp.status_code == 200
     body = resp.json()
     assert "live" in body and "live30_candidates" in body and "scheduled" in body
+    assert "focus" in body and body["focus"]["fixture_id"] == "fx-live"
     assert live_hits["n"] == 1
     # Schedule cache should avoid a second wave of 5 fixtures calls.
     assert fixtures_hits["n"] == 0

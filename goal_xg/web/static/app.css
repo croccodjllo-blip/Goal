@@ -273,10 +273,10 @@ button:focus-visible,
 .live-pill::before { content: none; }
 
 .match-link--sched {
-  grid-template-columns: 5.2rem minmax(0, 1fr) minmax(4rem, 7rem);
+  grid-template-columns: 3.2rem minmax(0, 1fr) minmax(3.5rem, 6rem) 2.6rem;
 }
 .kickoff-badge {
-  font-size: 0.62rem;
+  font-size: 0.68rem;
   letter-spacing: 0;
   white-space: nowrap;
 }

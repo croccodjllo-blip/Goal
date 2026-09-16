@@ -361,13 +361,21 @@ class GoalApiClient:
     # --- Convenience endpoints (Phase A) ---------------------------------
 
     def fixtures_by_date(self, date: str, *, league_id: int | str | None = None) -> Any:
-        """Fetch fixtures for YYYY-MM-DD; optionally filter by league id client-side later."""
-        params: dict[str, Any] = {"date": date}
+        """Fetch fixtures for YYYY-MM-DD.
+
+        GOAL filters correctly with ``from``/``to`` (plain ``date`` alone is
+        unreliable). Optional ``leagueId`` scopes to one league.
+        """
+        params: dict[str, Any] = {
+            "from": date,
+            "to": date,
+            "date": date,
+            "limit": 100,
+        }
         if league_id is not None:
             # GOAL API filters reliably on ``leagueId`` (``league`` alone is ignored).
             params["leagueId"] = league_id
             params["league"] = league_id
-        # Try common path shapes; GOAL docs use /fixtures
         return self.get("/fixtures", **params)
 
     def fixture_by_id(self, fixture_id: int | str) -> Any:

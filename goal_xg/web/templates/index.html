@@ -3,11 +3,56 @@
 {% block content %}
 <header class="board-head">
   <h1>Live Big-5</h1>
-  <p>Watchlist 0-0 (28′–32′ → indice) · partite in programma sotto.</p>
+  <p>Focus 0-0 · 28′–32′ → indice · programma di oggi sotto.</p>
 </header>
 
 {% if error %}
 <div class="alert">{{ error }}</div>
+{% endif %}
+
+{% if focus %}
+<p class="section-label"><span class="window-pill">Focus</span>
+  {% if focus_reason == 'finestra' %}Prossima in finestra 0-0
+  {% elif focus_reason == 'live_00' %}Prossima live 0-0
+  {% elif focus_reason == 'upcoming' %}Prossima in programma
+  {% else %}Attenzione{% endif %}
+</p>
+<div class="league-group">
+  <ul class="match-list">
+    <li class="match-row hot">
+      <a class="match-link" href="/fixtures/{{ focus.fixture_id }}">
+        <span class="minute-badge{% if focus.minute is none %} is-waiting{% endif %}">
+          {% if focus.minute is not none %}{{ focus.minute }}′{% elif focus.kickoff_time %}{{ focus.kickoff_time }}{% elif focus.kickoff_label %}{{ focus.kickoff_label }}{% else %}—{% endif %}
+        </span>
+        <span class="teams">
+          <span class="team-name">{{ focus.home_name }}</span>
+          <span class="team-name">{{ focus.away_name }}</span>
+        </span>
+        <span class="score-col">
+          {% if focus.status == 'scheduled' and focus.score_home is none %}
+          <span>–</span><span>–</span>
+          {% else %}
+          <span>{{ focus.score_home if focus.score_home is not none else "–" }}</span>
+          <span>{{ focus.score_away if focus.score_away is not none else "–" }}</span>
+          {% endif %}
+        </span>
+        <span class="status-col">
+          {% if focus.xg_score is not none %}
+          <span class="xg-badge {{ focus.xg_tone }}" title="Indice prodotto xG">{{ focus.xg_score }}</span>
+          {% elif focus.in_window and focus.is_00 %}
+          <span class="window-pill">28–32′</span>
+          {% elif focus.status == 'scheduled' %}
+          <span class="xg-badge">prog.</span>
+          {% elif focus.is_00 %}
+          <span class="xg-badge">0-0</span>
+          {% else %}
+          <span class="live-pill">Live</span>
+          {% endif %}
+        </span>
+      </a>
+    </li>
+  </ul>
+</div>
 {% endif %}
 
 {% if candidates %}
@@ -80,10 +125,10 @@
   </section>
   {% endfor %}
 {% else %}
-<p class="empty">Nessun 0-0 live Big-5 — vedi partite in programma.</p>
+<p class="empty">Nessun 0-0 live Big-5 — vedi partite in programma oggi.</p>
 {% endif %}
 
-<p class="section-label"><span class="sched-pill">In programma</span> Prossime Big-5</p>
+<p class="section-label"><span class="sched-pill">Oggi</span> Partite in programma oggi</p>
 
 {% if scheduled %}
 <section class="league-group">
@@ -91,18 +136,27 @@
     {% for c in scheduled %}
     <li class="match-row">
       <a class="match-link match-link--sched" href="/fixtures/{{ c.fixture_id }}">
-        <span class="minute-badge is-waiting kickoff-badge" title="Kickoff (Europe/Rome)">{{ c.kickoff_label }}</span>
+        <span class="minute-badge is-waiting kickoff-badge" title="Kickoff">{{ c.kickoff_time or c.kickoff_label or "—" }}</span>
         <span class="teams">
           <span class="team-name">{{ c.home_name }}</span>
           <span class="team-name">{{ c.away_name }}</span>
         </span>
         <span class="league-col">{{ c.league_name }}</span>
+        <span class="status-col">
+          {% if c.status == 'live' %}
+          <span class="live-pill">Live</span>
+          {% elif c.status == 'finished' %}
+          <span class="xg-badge">FT</span>
+          {% else %}
+          <span class="xg-badge">prog.</span>
+          {% endif %}
+        </span>
       </a>
     </li>
     {% endfor %}
   </ul>
 </section>
 {% else %}
-<p class="empty">Nessuna partita in programma (o API non raggiungibile).</p>
+<p class="empty">Nessuna partita Big-5 in programma oggi.</p>
 {% endif %}
 {% endblock %}
