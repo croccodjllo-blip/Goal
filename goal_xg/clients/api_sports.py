@@ -63,6 +63,212 @@ SHOT_ENRICH_FIELDS: tuple[str, ...] = (
     "shots_outside_box_away",
 )
 
+# Italian labels for API-Football ``statistics[].type`` (display dump).
+# Unknown types fall back to the raw English key in the UI.
+STAT_LABELS_IT: dict[str, str] = {
+    "Total Shots": "Tiri totali",
+    "Shots on Goal": "Tiri in porta",
+    "Shots off Goal": "Tiri fuori",
+    "Blocked Shots": "Tiri respinti",
+    "Shots insidebox": "Tiri in area",
+    "Shots outsidebox": "Tiri da fuori",
+    "Hit Woodwork": "Pali e traverse",
+    "expected_goals": "Goal attesi (xG)",
+    "Expected Goals": "Goal attesi (xG)",
+    "xg": "Goal attesi (xG)",
+    "expected_goals_on_target": "xGOT",
+    "Expected Goals on Target": "xGOT",
+    "Ball Possession": "Possesso palla",
+    "Total passes": "Passaggi totali",
+    "Passes accurate": "Passaggi completati",
+    "Passes %": "Precisione passaggi",
+    "Corner Kicks": "Calci d'angolo",
+    "Offsides": "Fuorigioco",
+    "Fouls": "Falli",
+    "Yellow Cards": "Cartellini gialli",
+    "Red Cards": "Cartellini rossi",
+    "Goalkeeper Saves": "Parate",
+    "Free Kicks": "Calci di punizione",
+    "Throw Ins": "Rimesse laterali",
+    "Goal Kicks": "Rimesse dal fondo",
+    "Attacks": "Attacchi",
+    "Dangerous Attacks": "Attacchi pericolosi",
+    "Tackles": "Contrasti",
+    "Interceptions": "Intercetti",
+    "Clearances": "Spazzate",
+    "Counter Attacks": "Contropiede",
+    "Goals prevented": "Gol prevenuti",
+    "Big Chances": "Grandissime occasioni",
+    "Big Chances Missed": "Occasioni sprecate",
+    "Big Chances Scored": "Occasioni convertite",
+    "Shots on Goal Rate": "Tasso tiri in porta",
+}
+
+# Types that map into the existing product-index shot criteria (enrich only).
+# Everything else is display-only — never auto-weighted into xG.
+INDEX_MAPPED_STAT_TYPES: frozenset[str] = frozenset(
+    {
+        "Total Shots",
+        "Shots on Goal",
+        "Shots off Goal",
+        "Blocked Shots",
+        "Shots insidebox",
+        "Shots outsidebox",
+        "Hit Woodwork",
+        "expected_goals",
+        "Expected Goals",
+        "xg",
+        "expected_goals_on_target",
+        "Expected Goals on Target",
+    }
+)
+
+
+@dataclass(frozen=True)
+class ApiSportsStatRow:
+    """One fixture statistic type with home/away (full + optional 1H)."""
+
+    type: str
+    label: str
+    home: Any = None
+    away: Any = None
+    home_1h: Any = None
+    away_1h: Any = None
+    in_index: bool = False
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "type": self.type,
+            "label": self.label,
+            "home": self.home,
+            "away": self.away,
+            "home_1h": self.home_1h,
+            "away_1h": self.away_1h,
+            "in_index": self.in_index,
+        }
+
+
+def label_stat_type(stat_type: str) -> str:
+    """Italian label when known; otherwise the raw API type string."""
+    raw = str(stat_type or "").strip()
+    if not raw:
+        return "—"
+    if raw in STAT_LABELS_IT:
+        return STAT_LABELS_IT[raw]
+    # Case-insensitive fallback.
+    for key, label in STAT_LABELS_IT.items():
+        if key.lower() == raw.lower():
+            return label
+    return raw
+
+
+def _stat_map(rows: Sequence[Mapping[str, Any]] | None) -> dict[str, Any]:
+    out: dict[str, Any] = {}
+    if not rows:
+        return out
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        typ = str(row.get("type") or row.get("name") or "").strip()
+        if not typ or typ in out:
+            continue
+        out[typ] = row.get("value")
+    return out
+
+
+def flatten_fixture_statistics(
+    payload: Any,
+    *,
+    home_team_id: int | None = None,
+    home_team_name: str | None = None,
+    away_team_id: int | None = None,
+    away_team_name: str | None = None,
+) -> list[ApiSportsStatRow]:
+    """Flatten API-Sports team statistics blocks into display rows (all types)."""
+    rows: list[dict[str, Any]]
+    if isinstance(payload, dict):
+        inner = payload.get("response")
+        rows = [r for r in inner if isinstance(r, dict)] if isinstance(inner, list) else []
+        if not rows and ("team" in payload or "statistics" in payload):
+            rows = [payload]
+    elif isinstance(payload, list):
+        rows = [r for r in payload if isinstance(r, dict)]
+    else:
+        rows = []
+    if not rows:
+        return []
+
+    def _team_id(block: Mapping[str, Any]) -> int | None:
+        team = block.get("team") if isinstance(block.get("team"), dict) else {}
+        try:
+            return int(team["id"]) if team.get("id") is not None else None
+        except (TypeError, ValueError, KeyError):
+            return None
+
+    def _team_name(block: Mapping[str, Any]) -> str | None:
+        team = block.get("team") if isinstance(block.get("team"), dict) else {}
+        name = team.get("name")
+        return str(name) if name else None
+
+    home_block: Mapping[str, Any] | None = None
+    away_block: Mapping[str, Any] | None = None
+    for block in rows:
+        tid = _team_id(block)
+        tname = _team_name(block)
+        if home_block is None and (
+            (home_team_id is not None and tid == home_team_id)
+            or (home_team_name and _team_names_match(tname, home_team_name))
+        ):
+            home_block = block
+            continue
+        if away_block is None and (
+            (away_team_id is not None and tid == away_team_id)
+            or (away_team_name and _team_names_match(tname, away_team_name))
+        ):
+            away_block = block
+            continue
+    if home_block is None and rows:
+        home_block = rows[0]
+    if away_block is None and len(rows) > 1:
+        away_block = rows[1]
+
+    home_full = _stat_map(
+        home_block.get("statistics") if isinstance(home_block, Mapping) else None
+    )
+    away_full = _stat_map(
+        away_block.get("statistics") if isinstance(away_block, Mapping) else None
+    )
+    home_1h = _stat_map(
+        home_block.get("statistics_1h") if isinstance(home_block, Mapping) else None
+    )
+    away_1h = _stat_map(
+        away_block.get("statistics_1h") if isinstance(away_block, Mapping) else None
+    )
+
+    # Preserve first-seen order: home full → away extras → 1H-only keys.
+    order: list[str] = []
+    for key in (*home_full.keys(), *away_full.keys(), *home_1h.keys(), *away_1h.keys()):
+        if key not in order:
+            order.append(key)
+
+    out: list[ApiSportsStatRow] = []
+    for typ in order:
+        in_index = typ in INDEX_MAPPED_STAT_TYPES or any(
+            t.lower() == typ.lower() for t in INDEX_MAPPED_STAT_TYPES
+        )
+        out.append(
+            ApiSportsStatRow(
+                type=typ,
+                label=label_stat_type(typ),
+                home=home_full.get(typ),
+                away=away_full.get(typ),
+                home_1h=home_1h.get(typ),
+                away_1h=away_1h.get(typ),
+                in_index=in_index,
+            )
+        )
+    return out
+
 
 def api_sports_key_configured() -> bool:
     """True when ``API_SPORTS_KEY`` or ``APISPORTS_KEY`` is non-empty."""
@@ -354,6 +560,113 @@ class ApiSportsClient:
         if isinstance(payload, list):
             return [r for r in payload if isinstance(r, dict)]
         return []
+
+    def fixture_events(
+        self,
+        fixture_id: int | str,
+        *,
+        team: int | None = None,
+        event_type: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """``GET /fixtures/events`` — goals / cards / subs (display, not index)."""
+        params: dict[str, Any] = {"fixture": fixture_id}
+        if team is not None:
+            params["team"] = team
+        if event_type is not None:
+            params["type"] = event_type
+        payload = self.get("/fixtures/events", **params)
+        if isinstance(payload, list):
+            return [r for r in payload if isinstance(r, dict)]
+        return []
+
+    def load_fixture_stat_dump(
+        self,
+        *,
+        home_name: str | None,
+        away_name: str | None,
+        date: str | None = None,
+        season: int | None = None,
+        api_id: int | str | None = None,
+        fixture_id: int | str | None = None,
+        live_rows: Sequence[Mapping[str, Any]] | None = None,
+        include_events: bool = True,
+        prefer_half: bool = True,
+    ) -> dict[str, Any]:
+        """Resolve fixture + return full stats table (all types) for UI dump.
+
+        Index blend is unchanged — ``in_index`` only flags types that *may*
+        fill existing shot criteria; other fields are transparency-only.
+        """
+        fid: int | None
+        if fixture_id is not None:
+            try:
+                fid = int(str(fixture_id).strip())
+            except (TypeError, ValueError):
+                fid = None
+        else:
+            fid = self.find_fixture_id(
+                home_name=home_name,
+                away_name=away_name,
+                date=date,
+                season=season,
+                api_id=api_id,
+                live_rows=live_rows,
+            )
+        meta: dict[str, Any] = {
+            "configured": True,
+            "fixture_id": fid,
+            "home_name": home_name,
+            "away_name": away_name,
+            "source": "api-football",
+            "half": prefer_half,
+            "error": None,
+            "events_n": 0,
+            "stat_types": [],
+        }
+        if fid is None:
+            meta["error"] = "fixture_unresolved"
+            return {"meta": meta, "rows": [], "events": []}
+
+        try:
+            payload = self.fixture_statistics(fid, half=prefer_half)
+        except ApiSportsError as exc:
+            meta["error"] = str(exc)[:200]
+            return {"meta": meta, "rows": [], "events": []}
+
+        rows = flatten_fixture_statistics(
+            payload,
+            home_team_name=home_name,
+            away_team_name=away_name,
+        )
+        meta["stat_types"] = [r.type for r in rows]
+
+        events: list[dict[str, Any]] = []
+        if include_events:
+            try:
+                raw_events = self.fixture_events(fid)
+            except ApiSportsError:
+                raw_events = []
+            for ev in raw_events:
+                time_obj = ev.get("time") if isinstance(ev.get("time"), dict) else {}
+                team = ev.get("team") if isinstance(ev.get("team"), dict) else {}
+                player = ev.get("player") if isinstance(ev.get("player"), dict) else {}
+                events.append(
+                    {
+                        "minute": time_obj.get("elapsed"),
+                        "extra": time_obj.get("extra"),
+                        "team": team.get("name"),
+                        "player": player.get("name"),
+                        "type": ev.get("type"),
+                        "detail": ev.get("detail"),
+                    }
+                )
+            meta["events_n"] = len(events)
+
+        return {
+            "meta": meta,
+            "rows": [r.to_dict() for r in rows],
+            "events": events,
+        }
 
     # --- Parse / merge ----------------------------------------------------
 

@@ -144,5 +144,57 @@
 {% endif %}
 {% endif %}
 
+{% if api_sports_rows or api_sports_meta %}
+<section class="api-sports" aria-labelledby="api-sports-heading">
+  <h2 id="api-sports-heading">Stats API-Football</h2>
+  <p class="components-intro">
+    Dump completo delle statistiche fixture da API-Football (trasparenza).
+    Solo i tipi con tag <span class="tag-index">indice</span> possono riempire criteri già presenti nell’indice — gli altri non pesano sul blend.
+  </p>
+  {% if api_sports_meta and api_sports_meta.error %}
+  <p class="api-sports-note muted">Non disponibile: {{ api_sports_meta.error }}{% if api_sports_meta.fixture_id %} · id {{ api_sports_meta.fixture_id }}{% endif %}</p>
+  {% elif api_sports_meta and api_sports_meta.fixture_id %}
+  <p class="api-sports-note muted">fixture {{ api_sports_meta.fixture_id }}{% if api_sports_meta.stat_types %} · {{ api_sports_meta.stat_types|length }} tipi{% endif %}{% if api_sports_meta.events_n %} · {{ api_sports_meta.events_n }} eventi{% endif %}</p>
+  {% endif %}
+  {% if api_sports_rows %}
+  <div class="api-sports-head" aria-hidden="true">
+    <span>Statistica</span>
+    <span class="col-h">Casa</span>
+    <span class="col-a">Trasf.</span>
+    <span class="col-h1">1H C</span>
+    <span class="col-a1">1H T</span>
+  </div>
+  <ul class="api-sports-list">
+    {% for row in api_sports_rows %}
+    <li class="api-sports-row{% if row.in_index %} is-index{% endif %}">
+      <div class="api-sports-main">
+        <span class="api-sports-label">{{ row.label }}</span>
+        <span class="api-sports-type">{{ row.type }}{% if row.in_index %} · <span class="tag-index">indice</span>{% endif %}</span>
+      </div>
+      <span class="api-sports-h">{{ row.home }}</span>
+      <span class="api-sports-a">{{ row.away }}</span>
+      <span class="api-sports-h1">{{ row.home_1h }}</span>
+      <span class="api-sports-a1">{{ row.away_1h }}</span>
+    </li>
+    {% endfor %}
+  </ul>
+  {% elif not (api_sports_meta and api_sports_meta.error) %}
+  <p class="api-sports-note muted">Nessuna statistica API-Football per questa partita.</p>
+  {% endif %}
+  {% if api_sports_events %}
+  <h3 class="api-sports-sub">Eventi</h3>
+  <ul class="api-sports-events">
+    {% for ev in api_sports_events %}
+    <li>
+      <span class="ev-min">{% if ev.minute is not none %}{{ ev.minute }}′{% else %}—{% endif %}</span>
+      <span class="ev-type">{{ ev.type or "—" }}{% if ev.detail %} · {{ ev.detail }}{% endif %}</span>
+      <span class="ev-who">{{ ev.team or "" }}{% if ev.player %} · {{ ev.player }}{% endif %}</span>
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+</section>
+{% endif %}
+
 <p class="api-link muted"><a href="/api/live30/{{ fixture_id }}">JSON API</a></p>
 {% endblock %}

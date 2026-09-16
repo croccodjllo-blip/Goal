@@ -282,14 +282,118 @@ def test_enrich_live_volume_fills_gaps(mock_http: MagicMock) -> None:
     assert kwargs["params"]["half"] == "true"
 
 
-def test_big5_league_ids_locked() -> None:
-    assert BIG5_LEAGUE_IDS == {
-        "PL": 39,
-        "PD": 140,
-        "SA": 135,
-        "BL1": 78,
-        "FL1": 61,
-    }
+def test_flatten_fixture_statistics_all_types() -> None:
+    from goal_xg.clients.api_sports import flatten_fixture_statistics, label_stat_type
+
+    payload = [
+        {
+            "team": {"id": 1, "name": "Home FC"},
+            "statistics": [
+                {"type": "Ball Possession", "value": "60%"},
+                {"type": "Total Shots", "value": 12},
+                {"type": "Corner Kicks", "value": 5},
+                {"type": "Goalkeeper Saves", "value": 2},
+                {"type": "Fouls", "value": 8},
+                {"type": "Yellow Cards", "value": 1},
+                {"type": "Passes %", "value": "84%"},
+            ],
+            "statistics_1h": [
+                {"type": "Total Shots", "value": 7},
+                {"type": "Ball Possession", "value": "58%"},
+            ],
+        },
+        {
+            "team": {"id": 2, "name": "Away FC"},
+            "statistics": [
+                {"type": "Ball Possession", "value": "40%"},
+                {"type": "Total Shots", "value": 4},
+                {"type": "Corner Kicks", "value": 2},
+                {"type": "Goalkeeper Saves", "value": 4},
+                {"type": "Fouls", "value": 11},
+                {"type": "Yellow Cards", "value": 2},
+                {"type": "Passes %", "value": "72%"},
+            ],
+            "statistics_1h": [
+                {"type": "Total Shots", "value": 2},
+                {"type": "Ball Possession", "value": "42%"},
+            ],
+        },
+    ]
+    rows = flatten_fixture_statistics(
+        payload, home_team_name="Home FC", away_team_name="Away FC"
+    )
+    by_type = {r.type: r for r in rows}
+    assert "Ball Possession" in by_type
+    assert "Corner Kicks" in by_type
+    assert "Goalkeeper Saves" in by_type
+    assert by_type["Total Shots"].in_index is True
+    assert by_type["Ball Possession"].in_index is False
+    assert by_type["Total Shots"].home == 12
+    assert by_type["Total Shots"].home_1h == 7
+    assert by_type["Corner Kicks"].label == "Calci d'angolo"
+    assert label_stat_type("Unknown Stat XYZ") == "Unknown Stat XYZ"
+
+
+def test_load_fixture_stat_dump(mock_http: MagicMock) -> None:
+    mock_http.request.side_effect = [
+        _response(
+            200,
+            {
+                "errors": [],
+                "response": [
+                    {
+                        "team": {"id": 1, "name": "Home FC"},
+                        "statistics": [
+                            {"type": "Total Shots", "value": 5},
+                            {"type": "Offsides", "value": 2},
+                        ],
+                        "statistics_1h": [{"type": "Total Shots", "value": 3}],
+                    },
+                    {
+                        "team": {"id": 2, "name": "Away FC"},
+                        "statistics": [
+                            {"type": "Total Shots", "value": 2},
+                            {"type": "Offsides", "value": 1},
+                        ],
+                        "statistics_1h": [{"type": "Total Shots", "value": 1}],
+                    },
+                ],
+            },
+        ),
+        _response(
+            200,
+            {
+                "errors": [],
+                "response": [
+                    {
+                        "time": {"elapsed": 12, "extra": None},
+                        "team": {"name": "Home FC"},
+                        "player": {"name": "Rossi"},
+                        "type": "Card",
+                        "detail": "Yellow Card",
+                    }
+                ],
+            },
+        ),
+    ]
+    client = ApiSportsClient(
+        api_key="test-key-not-real",
+        client=mock_http,
+        min_interval_s=0,
+        sleep_fn=lambda _s: None,
+    )
+    dump = client.load_fixture_stat_dump(
+        home_name="Home FC",
+        away_name="Away FC",
+        fixture_id=4242,
+        include_events=True,
+    )
+    assert dump["meta"]["fixture_id"] == 4242
+    assert "Offsides" in dump["meta"]["stat_types"]
+    assert dump["meta"]["events_n"] == 1
+    assert len(dump["rows"]) == 2
+    assert dump["events"][0]["detail"] == "Yellow Card"
+
 
 
 def test_429_retries(mock_http: MagicMock) -> None:

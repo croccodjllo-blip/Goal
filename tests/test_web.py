@@ -71,6 +71,43 @@ def test_static_css(monkeypatch) -> None:
     assert "IBM Plex Mono" in resp.text or "IBM Plex Sans" in resp.text
     assert "radial-gradient" not in resp.text
     assert "@keyframes rise-in" not in resp.text
+    assert ".api-sports" in resp.text
+    assert ".api-sports-row" in resp.text
+    assert ".tag-index" in resp.text
+
+
+def test_api_sports_stat_rows_for_display() -> None:
+    from goal_xg.web.app import _api_sports_stat_rows_for_display
+
+    rows = _api_sports_stat_rows_for_display(
+        {
+            "rows": [
+                {
+                    "type": "Ball Possession",
+                    "label": "Possesso palla",
+                    "home": "68%",
+                    "away": "32%",
+                    "home_1h": "70%",
+                    "away_1h": "30%",
+                    "in_index": False,
+                },
+                {
+                    "type": "Total Shots",
+                    "label": "Tiri totali",
+                    "home": 10,
+                    "away": 1,
+                    "home_1h": 8,
+                    "away_1h": 1,
+                    "in_index": True,
+                },
+            ]
+        }
+    )
+    assert len(rows) == 2
+    assert rows[0]["label"] == "Possesso palla"
+    assert rows[0]["in_index"] is False
+    assert rows[1]["in_index"] is True
+    assert rows[1]["home"] == "10"
 
 
 def test_fixture_without_key(monkeypatch) -> None:

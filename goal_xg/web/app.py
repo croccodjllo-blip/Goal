@@ -12,6 +12,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
+from goal_xg.clients.api_sports import maybe_client as maybe_api_sports
 from goal_xg.clients.goal_api import GoalApiClient, GoalApiError, _as_league_id
 from goal_xg.live30.board import (
     clear_schedule_cache as clear_today_schedule_cache,
@@ -464,8 +465,110 @@ def _settled_snapshot_rows(score: dict[str, Any] | None) -> list[dict[str, str]]
     return rows
 
 
+def _format_stat_cell(value: Any) -> str:
+    if value is None or value == "":
+        return "—"
+    if isinstance(value, bool):
+        return "sì" if value else "no"
+    if isinstance(value, float):
+        if value == int(value) and abs(value) >= 1:
+            return str(int(value))
+        text = f"{value:.3f}".rstrip("0").rstrip(".")
+        return text or "0"
+    return str(value)
+
+
+def _api_sports_stat_rows_for_display(
+    dump: Mapping[str, Any] | None,
+) -> list[dict[str, Any]]:
+    """Normalize dump rows for the fixture «Stats API-Football» table."""
+    if not dump:
+        return []
+    raw_rows = dump.get("rows") if isinstance(dump.get("rows"), list) else []
+    out: list[dict[str, Any]] = []
+    for row in raw_rows:
+        if not isinstance(row, dict):
+            continue
+        typ = str(row.get("type") or "")
+        label = str(row.get("label") or typ or "—")
+        out.append(
+            {
+                "type": typ,
+                "label": label,
+                "home": _format_stat_cell(row.get("home")),
+                "away": _format_stat_cell(row.get("away")),
+                "home_1h": _format_stat_cell(row.get("home_1h")),
+                "away_1h": _format_stat_cell(row.get("away_1h")),
+                "in_index": bool(row.get("in_index")),
+                "has_1h": row.get("home_1h") is not None
+                or row.get("away_1h") is not None,
+            }
+        )
+    return out
+
+
+def _load_api_sports_dump_for_fixture(
+    fixture_row: Mapping[str, Any] | None,
+    card: Mapping[str, Any] | None,
+) -> dict[str, Any] | None:
+    """Fetch full API-Football statistics dump when key is configured."""
+    asp = maybe_api_sports()
+    if asp is None:
+        return None
+    try:
+        home_name = None
+        away_name = None
+        api_id = None
+        date = None
+        if card:
+            home_name = card.get("home_name")
+            away_name = card.get("away_name")
+        if isinstance(fixture_row, dict):
+            teams = (
+                fixture_row.get("teams")
+                if isinstance(fixture_row.get("teams"), dict)
+                else {}
+            )
+            home_t = teams.get("home") if isinstance(teams.get("home"), dict) else {}
+            away_t = teams.get("away") if isinstance(teams.get("away"), dict) else {}
+            home_name = (
+                home_name or home_t.get("name") or fixture_row.get("homeTeamName")
+            )
+            away_name = (
+                away_name or away_t.get("name") or fixture_row.get("awayTeamName")
+            )
+            for key in ("apiId", "api_id", "providerId", "provider_id"):
+                if fixture_row.get(key) is not None:
+                    api_id = fixture_row.get(key)
+                    break
+            kickoff = (
+                fixture_row.get("starting_at")
+                or fixture_row.get("startingAt")
+                or fixture_row.get("date")
+                or fixture_row.get("kickoff")
+            )
+            if kickoff:
+                date = str(kickoff).strip()[:10]
+        return asp.load_fixture_stat_dump(
+            home_name=str(home_name) if home_name else None,
+            away_name=str(away_name) if away_name else None,
+            date=date,
+            api_id=api_id,
+            include_events=True,
+            prefer_half=True,
+        )
+    except Exception:
+        return {
+            "meta": {"configured": True, "error": "api_sports_dump_failed"},
+            "rows": [],
+            "events": [],
+        }
+    finally:
+        asp.close()
+
+
 def create_app() -> FastAPI:
-    app = FastAPI(title="Goal xG", version="0.4.4", docs_url="/docs")
+    app = FastAPI(title="Goal xG", version="0.4.5", docs_url="/docs")
     app.mount("/static", StaticFiles(directory=str(_WEB_DIR / "static")), name="static")
 
     @app.get("/health")
@@ -483,7 +586,7 @@ def create_app() -> FastAPI:
         return {
             "ok": True,
             "service": "goal-xg",
-            "version": "0.4.4",
+            "version": "0.4.5",
             "goal_api_key_configured": goal_key,
             "football_data_configured": fd_key,
             "api_sports_configured": api_sports_key,
@@ -555,27 +658,28 @@ def create_app() -> FastAPI:
     def fixture_page(request: Request, fixture_id: str) -> HTMLResponse:
         _load_env()
         client = _client_or_none()
+        empty_ctx = {
+            "error": "GOAL_API_KEY mancante.",
+            "fixture_id": fixture_id,
+            "card": None,
+            "score": None,
+            "band": None,
+            "feature_rows": [],
+            "component_rows": [],
+            "settled_snapshot_rows": [],
+            "api_sports_rows": [],
+            "api_sports_events": [],
+            "api_sports_meta": None,
+        }
         if client is None:
-            return _TEMPLATES.TemplateResponse(
-                request,
-                "fixture.html",
-                {
-                    "error": "GOAL_API_KEY mancante.",
-                    "fixture_id": fixture_id,
-                    "card": None,
-                    "score": None,
-                    "band": None,
-                    "feature_rows": [],
-                    "component_rows": [],
-                    "settled_snapshot_rows": [],
-                },
-            )
+            return _TEMPLATES.TemplateResponse(request, "fixture.html", empty_ctx)
         error: str | None = None
         card: dict[str, Any] | None = None
         score_dict: dict[str, Any] | None = None
+        fixture_row: dict[str, Any] | None = None
         try:
             detail = client.fixture_by_id(fixture_id)
-            row = detail
+            row: Any = detail
             if isinstance(detail, dict):
                 for key in ("data", "response", "fixture"):
                     val = detail.get(key)
@@ -586,6 +690,7 @@ def create_app() -> FastAPI:
                         row = val[0]
                         break
             if isinstance(row, dict):
+                fixture_row = row
                 card = _row_card(row)
             # Fixture detail densifies history + standings so Alessandro sees
             # every available calculation input (U5 HA + classifica included).
@@ -595,6 +700,19 @@ def create_app() -> FastAPI:
             error = str(exc)
         finally:
             client.close()
+
+        api_dump = _load_api_sports_dump_for_fixture(fixture_row, card)
+        api_rows = _api_sports_stat_rows_for_display(api_dump)
+        api_events = (
+            api_dump.get("events")
+            if isinstance(api_dump, dict) and isinstance(api_dump.get("events"), list)
+            else []
+        )
+        api_meta = (
+            api_dump.get("meta")
+            if isinstance(api_dump, dict) and isinstance(api_dump.get("meta"), dict)
+            else None
+        )
 
         xg = score_dict.get("xg_score") if score_dict else None
         return _TEMPLATES.TemplateResponse(
@@ -609,6 +727,9 @@ def create_app() -> FastAPI:
                 "feature_rows": _feature_rows(score_dict),
                 "component_rows": _component_rows(score_dict),
                 "settled_snapshot_rows": _settled_snapshot_rows(score_dict),
+                "api_sports_rows": api_rows,
+                "api_sports_events": api_events,
+                "api_sports_meta": api_meta,
             },
         )
 
@@ -663,6 +784,23 @@ def create_app() -> FastAPI:
             scored = score_fixture_live30(client, fixture_id, fetch_history=False)
             data = live30_score_to_dict(scored)
             data["band"] = _xg_band(int(data["xg_score"]))
+            # Optional full API-Football dump (transparency; not index weights).
+            detail = client.fixture_by_id(fixture_id)
+            row: Any = detail
+            if isinstance(detail, dict):
+                for key in ("data", "response", "fixture"):
+                    val = detail.get(key)
+                    if isinstance(val, dict):
+                        row = val
+                        break
+                    if isinstance(val, list) and val and isinstance(val[0], dict):
+                        row = val[0]
+                        break
+            card = _row_card(row) if isinstance(row, dict) else None
+            dump = _load_api_sports_dump_for_fixture(
+                row if isinstance(row, dict) else None, card
+            )
+            data["api_sports"] = dump
             return JSONResponse(data)
         except GoalApiError as exc:
             raise HTTPException(status_code=502, detail=str(exc)) from exc

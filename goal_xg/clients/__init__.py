@@ -4,6 +4,8 @@ from goal_xg.clients.api_sports import (
     BIG5_LEAGUE_IDS,
     ApiSportsClient,
     api_sports_key_configured,
+    flatten_fixture_statistics,
+    label_stat_type,
     maybe_client as maybe_api_sports_client,
 )
 from goal_xg.clients.football_data import (
@@ -22,6 +24,8 @@ __all__ = [
     "ApiSportsClient",
     "api_sports_key_configured",
     "maybe_api_sports_client",
+    "flatten_fixture_statistics",
+    "label_stat_type",
     "BIG5_LEAGUE_CODES",
     "BIG5_COMPETITION_CODES",
     "BIG5_LEAGUE_IDS",
