@@ -67,9 +67,38 @@
   {% endif %}
 </section>
 
+{% if component_rows %}
+<section class="components" aria-labelledby="comp-heading">
+  <h2 id="comp-heading">Indice — componenti</h2>
+  <p class="components-intro">
+    Termini <code>BASE_WEIGHTS</code> che formano l’indice 0–100. Assenti/omessi → peso 0 e rinormalizzazione.
+  </p>
+  <ul class="comp-list">
+    {% for row in component_rows %}
+    <li class="comp-row is-{{ row.status }}">
+      <div class="comp-main">
+        <span class="comp-label">{{ row.label }}</span>
+        <span class="comp-id">{{ row.id }} · base {{ '%.0f'|format(row.base_pp) }}%</span>
+      </div>
+      <div class="comp-meta">
+        <span class="comp-status {{ row.status }}">{{ row.status_label }}</span>
+        <span class="comp-values">
+          {% if row.status == 'active' %}
+          {{ row.value_display }} <span class="w">· {{ row.weight_display }}</span>
+          {% else %}
+          <span class="w">{{ row.weight_display }}</span>
+          {% endif %}
+        </span>
+      </div>
+    </li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+
 {% if feature_rows %}
 <section class="features">
-  <h2>Breakdown live @30′</h2>
+  <h2>Stats live @30′</h2>
   <dl>
     {% for row in feature_rows %}
     <div class="feat-row">

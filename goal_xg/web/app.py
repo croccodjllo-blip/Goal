@@ -20,6 +20,7 @@ from goal_xg.live30.service import (
     live_row_to_state,
     score_fixture_live30,
 )
+from goal_xg.model.weights import BASE_WEIGHTS, MVP_OMIT_TERMS
 
 _WEB_DIR = Path(__file__).resolve().parent
 _TEMPLATES = Jinja2Templates(directory=str(_WEB_DIR / "templates"))
@@ -181,14 +182,29 @@ _FEATURE_LABELS: dict[str, str] = {
     "settled": "Settled",
 }
 
-_SIGNAL_LABELS: dict[str, str] = {
-    "pace": "Ritmo",
-    "pressure": "Pressione",
-    "set_pieces": "Palle inattive",
-    "goalkeeper": "Portiere",
-    "discipline": "Disciplina",
-    "subs": "Cambi",
-    "prematch": "Prior pre-match",
+
+# BASE_WEIGHTS terms → short Italian labels (fixture "Indice — componenti").
+_COMPONENT_LABELS: dict[str, str] = {
+    "residual_time": "Tempo residuo",
+    "team_priors": "Prior squadre",
+    "sot": "Tiri in porta",
+    "attacks": "Attacchi",
+    "corners": "Calci d'angolo",
+    "possession": "Possesso",
+    "saves": "Parate",
+    "live_ratings": "Rating live",
+    "form": "Forma recente",
+    "goal_minutes_last5": "Timing gol (ult. 5)",
+    "streaks": "Streak CS / scoring",
+    "matchup": "Matchup avversario",
+    "subs_formation": "Sub + modulo",
+    "scoring_by_formation": "Gol per modulo",
+    "standings": "Classifica / incentivo",
+    "fatigue": "Fatica / congestione",
+    "def_yellows": "Gialli difensori",
+    "club_h2h": "H2H società",
+    "coach_h2h": "H2H allenatori",
+    "weather": "Meteo",
 }
 
 
@@ -218,25 +234,95 @@ def _group_by_league(
 
 
 def _feature_rows(score: dict[str, Any] | None) -> list[dict[str, str]]:
+    """Live volume / formation stats only (not BASE_WEIGHTS ensemble dump)."""
     if not score:
         return []
     rows: list[dict[str, str]] = []
     features = score.get("features") if isinstance(score.get("features"), dict) else {}
-    signals = score.get("signals") if isinstance(score.get("signals"), dict) else {}
     for key, raw in features.items():
         if raw is None or raw == "":
             continue
         label = _FEATURE_LABELS.get(str(key), str(key).replace("_", " "))
         rows.append({"label": label, "value": str(raw)})
-    for key, raw in signals.items():
-        if raw is None:
+    return rows
+
+
+def _component_rows(score: dict[str, Any] | None) -> list[dict[str, Any]]:
+    """All BASE_WEIGHTS terms with active / omit-MVP / missing status.
+
+    Readable fixture breakdown — not a raw ``Segnale · …`` decimal dump.
+    """
+    signals: dict[str, Any] = {}
+    weights: dict[str, Any] = {}
+    if score:
+        if isinstance(score.get("signals"), dict):
+            signals = score["signals"]
+        if isinstance(score.get("weights_used"), dict):
+            weights = score["weights_used"]
+
+    rows: list[dict[str, Any]] = []
+    for key, base_pp in BASE_WEIGHTS.items():
+        label = _COMPONENT_LABELS.get(key, key.replace("_", " "))
+        base_w = float(base_pp)
+        if key in MVP_OMIT_TERMS:
+            rows.append(
+                {
+                    "id": key,
+                    "label": label,
+                    "status": "omit",
+                    "status_label": "Omit MVP · renorm",
+                    "value": None,
+                    "value_display": "—",
+                    "weight_pp": None,
+                    "base_pp": base_w,
+                    "weight_display": f"base {base_w:.0f}%",
+                }
+            )
             continue
-        label = _SIGNAL_LABELS.get(str(key), str(key).replace("_", " "))
-        try:
-            val = f"{float(raw):.2f}"
-        except (TypeError, ValueError):
-            val = str(raw)
-        rows.append({"label": f"Segnale · {label}", "value": val})
+
+        if key in signals and signals[key] is not None:
+            try:
+                sig = float(signals[key])
+                value_display = f"{sig:.2f}"
+            except (TypeError, ValueError):
+                sig = None
+                value_display = str(signals[key])
+            w_raw = weights.get(key)
+            try:
+                w_pp = float(w_raw) if w_raw is not None else None
+            except (TypeError, ValueError):
+                w_pp = None
+            weight_display = (
+                f"peso {w_pp:.1f}%" if w_pp is not None else f"base {base_w:.0f}%"
+            )
+            rows.append(
+                {
+                    "id": key,
+                    "label": label,
+                    "status": "active",
+                    "status_label": "Attivo",
+                    "value": sig,
+                    "value_display": value_display,
+                    "weight_pp": w_pp,
+                    "base_pp": base_w,
+                    "weight_display": weight_display,
+                }
+            )
+            continue
+
+        rows.append(
+            {
+                "id": key,
+                "label": label,
+                "status": "missing",
+                "status_label": "Assente · renorm",
+                "value": None,
+                "value_display": "—",
+                "weight_pp": None,
+                "base_pp": base_w,
+                "weight_display": f"base {base_w:.0f}%",
+            }
+        )
     return rows
 
 
@@ -324,6 +410,7 @@ def create_app() -> FastAPI:
                     "score": None,
                     "band": None,
                     "feature_rows": [],
+                    "component_rows": [],
                 },
             )
         error: str | None = None
@@ -361,6 +448,7 @@ def create_app() -> FastAPI:
                 "score": score_dict,
                 "band": _xg_band(int(xg) if xg is not None else None),
                 "feature_rows": _feature_rows(score_dict),
+                "component_rows": _component_rows(score_dict),
             },
         )
 

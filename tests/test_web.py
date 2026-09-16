@@ -60,6 +60,10 @@ def test_static_css(monkeypatch) -> None:
     assert "--brand-accent" in resp.text
     assert ".tag-short" in resp.text
     assert ".xg-badge.high" in resp.text
+    assert ".components" in resp.text
+    assert ".comp-row" in resp.text
+    assert "prefers-reduced-motion" in resp.text
+    assert "Outfit" in resp.text or "IBM Plex Sans" in resp.text
 
 
 def test_fixture_without_key(monkeypatch) -> None:
@@ -71,6 +75,34 @@ def test_fixture_without_key(monkeypatch) -> None:
     assert "xg-panel" not in resp.text or "mancante" in resp.text
     assert 'style="margin:0' not in resp.text
     assert "fixture-fallback" in resp.text
+
+
+def test_component_rows_covers_base_weights() -> None:
+    from goal_xg.model.weights import BASE_WEIGHTS, MVP_OMIT_TERMS
+    from goal_xg.web.app import _component_rows
+
+    rows = _component_rows(
+        {
+            "signals": {"residual_time": 0.78, "sot": 0.55, "team_priors": 0.6},
+            "weights_used": {"residual_time": 40.0, "sot": 30.0, "team_priors": 30.0},
+        }
+    )
+    assert len(rows) == len(BASE_WEIGHTS)
+    by_id = {r["id"]: r for r in rows}
+    assert set(by_id) == set(BASE_WEIGHTS)
+    assert by_id["residual_time"]["status"] == "active"
+    assert by_id["residual_time"]["value_display"] == "0.78"
+    assert "40.0" in by_id["residual_time"]["weight_display"]
+    assert by_id["live_ratings"]["status"] == "omit"
+    assert by_id["coach_h2h"]["status"] == "omit"
+    assert MVP_OMIT_TERMS <= {"live_ratings", "coach_h2h"}
+    assert by_id["form"]["status"] == "missing"
+    assert "Assente" in by_id["form"]["status_label"]
+    assert by_id["sot"]["label"] == "Tiri in porta"
+
+    empty = _component_rows(None)
+    assert len(empty) == len(BASE_WEIGHTS)
+    assert all(r["status"] in {"omit", "missing"} for r in empty)
 
 
 def test_index_and_api_live_share_one_fixtures_live(monkeypatch) -> None:
