@@ -13,12 +13,14 @@ from goal_xg.features.extractors import (
     signal_fatigue,
     signal_form,
     signal_goal_minutes_last5,
+    signal_goals_scored_last5_ha,
     signal_matchup,
     signal_standings,
     signal_streaks,
 )
 from goal_xg.live30.score import score_live30
 from goal_xg.live30.stats import LiveVolumeStats
+from goal_xg.model.weights import BASE_WEIGHTS, COMPONENT_LABELS_IT
 
 
 def _hist() -> list[dict]:
@@ -113,6 +115,59 @@ def test_standings_and_fatigue() -> None:
     assert signal_fatigue(hist, 1, 2, kickoff=None) is None
 
 
+def test_goals_scored_last5_ha_contextual() -> None:
+    """Home GF from home matches only; away GF from away matches only."""
+    hist = _hist()
+    # Team 1 scored 2 in each of 5 home games; team 2 scored 1 in each of 5 away.
+    sig = signal_goals_scored_last5_ha(hist, 1, 2)
+    assert sig is not None
+    # combined = 0.5*2 + 0.5*1 = 1.5 → between mid(1.2) and high(2.5)
+    assert 0.55 < sig < 0.90
+
+    # Only home-side history for team 1 as away → omit (need both sides).
+    home_only = [
+        {
+            "home_team_id": 1,
+            "away_team_id": 9,
+            "goals_home": 3,
+            "goals_away": 0,
+            "date": "2026-09-01T12:00:00+00:00",
+        }
+    ]
+    assert signal_goals_scored_last5_ha(home_only, 1, 2) is None
+    assert signal_goals_scored_last5_ha([], 1, 2) is None
+
+    # Side filter: team 1 away goals must not inflate home mean.
+    mixed = [
+        {
+            "home_team_id": 1,
+            "away_team_id": 50,
+            "goals_home": 1,
+            "goals_away": 0,
+            "date": "2026-09-01T12:00:00+00:00",
+        },
+        {
+            "home_team_id": 50,
+            "away_team_id": 1,
+            "goals_home": 0,
+            "goals_away": 5,  # team 1 as away — ignore for home mean
+            "date": "2026-09-08T12:00:00+00:00",
+        },
+        {
+            "home_team_id": 80,
+            "away_team_id": 2,
+            "goals_home": 0,
+            "goals_away": 2,
+            "date": "2026-09-02T12:00:00+00:00",
+        },
+    ]
+    sig2 = signal_goals_scored_last5_ha(mixed, 1, 2)
+    assert sig2 is not None
+    # home_avg=1, away_avg=2 → combined=1.5 → same band as hist (2+1)/2
+    assert 0.55 < sig2 < 0.90
+    assert COMPONENT_LABELS_IT["goals_scored_last5_ha"].startswith("Media gol")
+
+
 def test_build_extra_signals_and_live_wire() -> None:
     built = build_extra_signals(
         home_team_id=1,
@@ -136,6 +191,8 @@ def test_build_extra_signals_and_live_wire() -> None:
     assert "matchup" in built.signals
     assert "club_h2h" in built.signals
     assert "standings" in built.signals
+    assert "goals_scored_last5_ha" in built.signals
+    assert "standings" in built.signals
     assert set(built.signals).issubset(EXTRA_SIGNAL_KEYS)
 
     scored = score_live30(
@@ -150,24 +207,17 @@ def test_build_extra_signals_and_live_wire() -> None:
         league_p_over05_given_00=0.75,
     )
     assert not scored.skipped
-    # Shot-index only: prematch extractors are ignored by the live blend.
     assert "sot" in scored.weights_used
+    # New criteria wire into live blend when history/standings available.
+    assert "goals_scored_last5_ha" in scored.weights_used
+    assert "goals_scored_last5_ha" in scored.signals
+    assert "standings" in scored.weights_used
+    assert "standings" in scored.signals
+    # Other prematch extractors still ignored (not in BASE_WEIGHTS).
     assert "form" not in scored.weights_used
     assert "club_h2h" not in scored.weights_used
     assert "residual_time" not in scored.weights_used
-    assert set(scored.weights_used) <= set(
-        {
-            "shots_total",
-            "sot",
-            "shot_xg",
-            "xgot",
-            "woodwork",
-            "shots_off",
-            "shots_blocked",
-            "shots_inside_box",
-            "shots_outside_box",
-        }
-    )
+    assert set(scored.weights_used) <= set(BASE_WEIGHTS)
 
 
 def test_omit_all_extractors_when_no_data() -> None:

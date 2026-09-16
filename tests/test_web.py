@@ -83,17 +83,39 @@ def test_component_rows_only_available_shot_criteria() -> None:
 
     rows = _component_rows(
         {
-            "signals": {"sot": 0.55, "shot_xg": 0.70, "shots_total": 0.60},
-            "weights_used": {"sot": 30.0, "shot_xg": 40.0, "shots_total": 30.0},
+            "signals": {
+                "sot": 0.55,
+                "shot_xg": 0.70,
+                "shots_total": 0.60,
+                "goals_scored_last5_ha": 0.62,
+                "standings": 0.58,
+            },
+            "weights_used": {
+                "sot": 26.0,
+                "shot_xg": 34.0,
+                "shots_total": 20.0,
+                "goals_scored_last5_ha": 10.0,
+                "standings": 10.0,
+            },
         }
     )
     by_id = {r["id"]: r for r in rows}
-    assert set(by_id) == {"sot", "shot_xg", "shots_total"}
+    assert set(by_id) == {
+        "sot",
+        "shot_xg",
+        "shots_total",
+        "goals_scored_last5_ha",
+        "standings",
+    }
     assert all(r["status"] == "active" for r in rows)
     assert by_id["sot"]["label"] == COMPONENT_LABELS_IT["sot"]
     assert by_id["shot_xg"]["label"] == "Goal attesi (xG)"
-    assert "40.0" in by_id["shot_xg"]["weight_display"]
-    # Missing among the nine → not listed.
+    assert by_id["goals_scored_last5_ha"]["label"] == (
+        "Media gol ultime 5 (casa/trasferta)"
+    )
+    assert by_id["standings"]["label"] == "Classifica"
+    assert "34.0" in by_id["shot_xg"]["weight_display"]
+    # Missing among the eleven → not listed.
     assert "xgot" not in by_id
     assert "woodwork" not in by_id
     # Old / removed criteria never listed.
@@ -112,7 +134,7 @@ def test_component_rows_only_available_shot_criteria() -> None:
 
     empty = _component_rows(None)
     assert empty == []
-    assert len(BASE_WEIGHTS) == 9
+    assert len(BASE_WEIGHTS) == 11
 
 
 def test_index_and_api_live_share_one_fixtures_live(monkeypatch) -> None:

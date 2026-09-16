@@ -1,8 +1,9 @@
 """Prematch / live extra-signal builders for BASE_WEIGHTS terms.
 
 Builds ``form``, ``goal_minutes_last5``, ``streaks``, ``matchup``,
-``standings``, ``fatigue``, ``club_h2h`` as [0,1] signals from GOAL
-history / standings / H2H payloads. Missing inputs → omit (caller renorms).
+``standings``, ``fatigue``, ``club_h2h``, ``goals_scored_last5_ha`` as
+[0,1] signals from GOAL history / standings / H2H payloads. Missing
+inputs → omit (caller renorms).
 
 CSV football-data.co.uk is not wired yet (not used in this package) —
 builders accept the same finished-fixture shapes GOAL returns.
@@ -26,6 +27,7 @@ EXTRA_SIGNAL_KEYS: frozenset[str] = frozenset(
         "standings",
         "fatigue",
         "club_h2h",
+        "goals_scored_last5_ha",
     }
 )
 
@@ -310,6 +312,68 @@ def signal_matchup(
     return _clamp01(geo)
 
 
+def _side_matches(
+    fixtures: Sequence[RichFinished],
+    team_id: int | str,
+    *,
+    side: str,
+    last_n: int,
+) -> list[RichFinished]:
+    """Last-N finished matches for ``team_id`` on home or away side only."""
+    tid = team_id
+    if side == "home":
+        rows = [f for f in fixtures if f.home_team_id == tid]
+    elif side == "away":
+        rows = [f for f in fixtures if f.away_team_id == tid]
+    else:
+        raise ValueError(f"side must be 'home' or 'away', got {side!r}")
+    dated = [f for f in rows if f.kickoff is not None]
+    if len(dated) == len(rows) and rows:
+        rows = sorted(
+            dated, key=lambda f: f.kickoff or datetime.min.replace(tzinfo=timezone.utc)
+        )
+    return rows[-last_n:] if last_n > 0 else rows
+
+
+def signal_goals_scored_last5_ha(
+    finished: Sequence[Any],
+    home_team_id: int | str,
+    away_team_id: int | str,
+    *,
+    last_n: int = 5,
+    min_n: int = 1,
+) -> float | None:
+    """Match-level attack rate from side-specific last-N goals scored.
+
+    - Home team: mean goals scored in their last ``last_n`` **home** matches
+    - Away team: mean goals scored in their last ``last_n`` **away** matches
+    - Combine: simple average of both side means (match-level attack rate)
+
+    Fail-closed: omit if either side has fewer than ``min_n`` qualifying
+    finished matches (no invented history).
+    """
+    rows = _as_rich(finished)
+    home_home = _side_matches(rows, home_team_id, side="home", last_n=last_n)
+    away_away = _side_matches(rows, away_team_id, side="away", last_n=last_n)
+    if len(home_home) < min_n or len(away_away) < min_n:
+        return None
+
+    home_avg = sum(m.goals_home for m in home_home) / len(home_home)
+    away_avg = sum(m.goals_away for m in away_away) / len(away_away)
+    combined = 0.5 * home_avg + 0.5 * away_avg
+
+    # Map combined GF/match avg → [0,1]. Mid≈1.2 (typical Big-5 side GF),
+    # high≈2.5+ (strong dual attack). Sterile 0 → mild down.
+    mid, high = 1.2, 2.5
+    if combined <= 0:
+        return 0.28
+    if combined >= high:
+        return 0.90
+    if combined <= mid:
+        return _clamp01(0.28 + (0.55 - 0.28) * (combined / mid))
+    return _clamp01(0.55 + (0.90 - 0.55) * min(1.0, (combined - mid) / (high - mid)))
+
+
 def signal_club_h2h(
     h2h_rows: Sequence[Any],
     *,
@@ -519,6 +583,12 @@ def build_extra_signals(
         signals["matchup"] = mu
     else:
         notes.append("omit:matchup")
+
+    gf5 = signal_goals_scored_last5_ha(hist, home_team_id, away_team_id)
+    if gf5 is not None:
+        signals["goals_scored_last5_ha"] = gf5
+    else:
+        notes.append("omit:goals_scored_last5_ha")
 
     h2h = signal_club_h2h(h2h_rows or [], league_baseline=league_baseline)
     if h2h is not None:

@@ -113,8 +113,9 @@ def build_live_signals(
     league_p_over05_given_00: float | None = None,
     weather_signal: float | None = None,
 ) -> dict[str, float]:
-    """Build [0,1] signals for the nine shot criteria only; omit missing."""
-    # Prematch/weather/league prior are not weighted index criteria.
+    """Build [0,1] signals for shot criteria + optional BASE_WEIGHTS extras; omit missing."""
+    # Prematch/weather/league prior are not weighted index criteria
+    # unless present in BASE_WEIGHTS and passed via extra_signals.
     _ = (priors, league_p_over05_given_00, weather_signal)
 
     signals: dict[str, float] = {}
@@ -217,7 +218,7 @@ def score_live30(
     )
     notes: list[str] = [
         f"window={LIVE_WINDOW_MIN}-{LIVE_WINDOW_MAX} target={LIVE_TARGET_MINUTE}",
-        "index=shot_stats_v1 (9 criteria)",
+        "index=shot_stats_v2 (11 criteria: 9 shots + goals_scored_last5_ha + standings)",
     ]
 
     if snap.minute is None or snap.score_home is None or snap.score_away is None:

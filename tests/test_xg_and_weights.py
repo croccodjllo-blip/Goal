@@ -38,7 +38,7 @@ def test_xg_score_canonical_examples() -> None:
 def test_base_weights_shot_index_sum_100() -> None:
     assert abs(sum(BASE_WEIGHTS.values()) - 100.0) < 1e-9
     assert set(BASE_WEIGHTS) == set(COMPONENT_LABELS_IT)
-    assert len(BASE_WEIGHTS) == 9
+    assert len(BASE_WEIGHTS) == 11
     # Old criteria removed from the product index.
     for removed in (
         "residual_time",
@@ -57,14 +57,21 @@ def test_base_weights_shot_index_sum_100() -> None:
 
 def test_shot_index_weight_table() -> None:
     assert BASE_WEIGHTS["shot_xg"] == 20.0
-    assert BASE_WEIGHTS["sot"] == 18.0
+    assert BASE_WEIGHTS["sot"] == 13.0
     assert BASE_WEIGHTS["xgot"] == 16.0
-    assert BASE_WEIGHTS["shots_total"] == 14.0
+    assert BASE_WEIGHTS["shots_total"] == 9.0
     assert BASE_WEIGHTS["shots_inside_box"] == 8.0
     assert BASE_WEIGHTS["woodwork"] == 6.0
     assert BASE_WEIGHTS["shots_off"] == 6.0
     assert BASE_WEIGHTS["shots_blocked"] == 6.0
     assert BASE_WEIGHTS["shots_outside_box"] == 6.0
+    assert BASE_WEIGHTS["goals_scored_last5_ha"] == 5.0
+    assert BASE_WEIGHTS["standings"] == 5.0
+    assert (
+        COMPONENT_LABELS_IT["goals_scored_last5_ha"]
+        == "Media gol ultime 5 (casa/trasferta)"
+    )
+    assert COMPONENT_LABELS_IT["standings"] == "Classifica"
 
 
 def test_mvp_omit_empty_for_shot_index() -> None:
@@ -78,8 +85,8 @@ def test_omit_and_renorm_available_subset() -> None:
     w = omit_and_renorm(available={"sot", "shot_xg"})
     assert set(w) == {"sot", "shot_xg"}
     assert abs(sum(w.values()) - 100.0) < 1e-9
-    assert w["sot"] == pytest.approx(18 / 38 * 100)
-    assert w["shot_xg"] == pytest.approx(20 / 38 * 100)
+    assert w["sot"] == pytest.approx(13 / 33 * 100)
+    assert w["shot_xg"] == pytest.approx(20 / 33 * 100)
 
 
 def test_omit_everything_returns_empty() -> None:

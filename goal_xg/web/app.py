@@ -228,7 +228,7 @@ def _feature_rows(score: dict[str, Any] | None) -> list[dict[str, str]]:
 
 
 def _component_rows(score: dict[str, Any] | None) -> list[dict[str, Any]]:
-    """Only available shot-index criteria (Attivo). No omit/absent rows."""
+    """Only available index criteria (Attivo). No omit/absent rows."""
     signals: dict[str, Any] = {}
     weights: dict[str, Any] = {}
     if score:
@@ -286,7 +286,7 @@ def _component_rows(score: dict[str, Any] | None) -> list[dict[str, Any]]:
 
 
 def create_app() -> FastAPI:
-    app = FastAPI(title="Goal xG", version="0.4.0", docs_url="/docs")
+    app = FastAPI(title="Goal xG", version="0.4.1", docs_url="/docs")
     app.mount("/static", StaticFiles(directory=str(_WEB_DIR / "static")), name="static")
 
     @app.get("/health")
@@ -300,7 +300,7 @@ def create_app() -> FastAPI:
         return {
             "ok": True,
             "service": "goal-xg",
-            "version": "0.4.0",
+            "version": "0.4.1",
             "goal_api_key_configured": goal_key,
             "football_data_configured": fd_key,
         }
