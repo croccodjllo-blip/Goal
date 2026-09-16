@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import os
+import time
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
@@ -24,6 +27,14 @@ from goal_xg.model.weights import BASE_WEIGHTS, COMPONENT_LABELS_IT
 
 _WEB_DIR = Path(__file__).resolve().parent
 _TEMPLATES = Jinja2Templates(directory=str(_WEB_DIR / "templates"))
+
+# Scheduled Big-5 list: cache to spare daily REST quota (5 leagues × refresh).
+_SCHEDULE_TTL_SEC = 900.0
+_SCHEDULE_HORIZON_DAYS = 14
+_SCHEDULE_LIMIT_PER_LEAGUE = 30
+_SCHEDULE_DISPLAY_MAX = 40
+_ROME = ZoneInfo("Europe/Rome")
+_schedule_cache: dict[str, Any] = {"at": 0.0, "cards": []}
 
 
 def _load_env() -> None:
@@ -132,6 +143,188 @@ def _attach_board_xg(card: dict[str, Any]) -> dict[str, Any]:
     card["xg_score"] = xg
     card["xg_tone"] = _xg_tone(xg)
     return card
+
+
+def _filter_live_00(cards: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Keep only 0-0 live rows — drop scored matches from the watchlist."""
+    return [c for c in cards if c.get("is_00") is True]
+
+
+def _sort_live_watch(cards: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Prioritize 28–32′ window, then closer to 30′."""
+
+    def _key(card: dict[str, Any]) -> tuple[int, int, int]:
+        in_window = 0 if card.get("in_window") else 1
+        minute = card.get("minute")
+        m = int(minute) if isinstance(minute, (int, float)) else 999
+        return (in_window, abs(m - 30), -m if m != 999 else 0)
+
+    return sorted(cards, key=_key)
+
+
+def _parse_kickoff_utc(row: dict[str, Any]) -> datetime | None:
+    raw = (
+        row.get("kickoffUtc")
+        or row.get("kickoff_utc")
+        or row.get("starting_at")
+        or row.get("startingAt")
+        or row.get("kickoff")
+        or row.get("date")
+    )
+    if raw is None or raw == "":
+        return None
+    if isinstance(raw, (int, float)):
+        try:
+            ts = float(raw)
+            if ts > 1e12:
+                ts /= 1000.0
+            return datetime.fromtimestamp(ts, tz=timezone.utc)
+        except (OSError, OverflowError, ValueError):
+            return None
+    text = str(raw).strip()
+    if not text:
+        return None
+    if text.endswith("Z"):
+        text = text[:-1] + "+00:00"
+    try:
+        dt = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
+
+
+def _format_kickoff_rome(dt: datetime) -> str:
+    local = dt.astimezone(_ROME)
+    return local.strftime("%d/%m %H:%M")
+
+
+def _is_scheduled_status(row: dict[str, Any]) -> bool:
+    raw = str(row.get("matchStatus") or row.get("status") or "").strip().upper()
+    if not raw:
+        # Fail-closed: only accept explicit not-started statuses.
+        return False
+    return raw in {
+        "SCHEDULED",
+        "NS",
+        "NOT_STARTED",
+        "NSY",
+        "TIMED",
+        "FIXTURE",
+    }
+
+
+def _unwrap_fixture_rows(payload: Any) -> list[dict[str, Any]]:
+    if isinstance(payload, list):
+        return [r for r in payload if isinstance(r, dict)]
+    if isinstance(payload, dict):
+        for key in ("data", "response", "fixtures", "results"):
+            val = payload.get(key)
+            if isinstance(val, list):
+                return [r for r in val if isinstance(r, dict)]
+    return []
+
+
+def _scheduled_card(row: dict[str, Any], *, kickoff: datetime) -> dict[str, Any]:
+    league = row.get("league") if isinstance(row.get("league"), dict) else {}
+    teams = row.get("teams") if isinstance(row.get("teams"), dict) else {}
+    home_t = teams.get("home") if isinstance(teams.get("home"), dict) else {}
+    away_t = teams.get("away") if isinstance(teams.get("away"), dict) else {}
+    fid = row.get("id") or row.get("fixtureId")
+    return {
+        "fixture_id": str(fid) if fid is not None else "",
+        "home_name": home_t.get("name") or row.get("homeTeamName") or "?",
+        "away_name": away_t.get("name") or row.get("awayTeamName") or "?",
+        "league_name": league.get("name") or row.get("leagueName") or "",
+        "kickoff_utc": kickoff.isoformat(),
+        "kickoff_label": _format_kickoff_rome(kickoff),
+    }
+
+
+def clear_schedule_cache() -> None:
+    """Test helper — drop in-memory scheduled cache."""
+    _schedule_cache["at"] = 0.0
+    _schedule_cache["cards"] = []
+
+
+def list_scheduled_big5(
+    client: GoalApiClient,
+    *,
+    now: datetime | None = None,
+    use_cache: bool = True,
+) -> list[dict[str, Any]]:
+    """Upcoming Big-5 fixtures (SCHEDULED), ordered by kickoff. Fail-closed.
+
+    Uses ``GET /fixtures?leagueId=&status=SCHEDULED`` per Big-5 league.
+    Results cached ``_SCHEDULE_TTL_SEC`` to limit daily REST quota.
+    """
+    now_utc = now or datetime.now(timezone.utc)
+    if now_utc.tzinfo is None:
+        now_utc = now_utc.replace(tzinfo=timezone.utc)
+    else:
+        now_utc = now_utc.astimezone(timezone.utc)
+
+    if use_cache:
+        cached_at = float(_schedule_cache.get("at") or 0.0)
+        cached = _schedule_cache.get("cards")
+        # ``at == 0`` means empty / cleared — never treat as a warm cache hit
+        # (monotonic()-0 can be < TTL on a young process).
+        if (
+            cached_at > 0.0
+            and (time.monotonic() - cached_at) < _SCHEDULE_TTL_SEC
+            and isinstance(cached, list)
+        ):
+            return list(cached)
+
+    try:
+        leagues = client.discover_big5_leagues()
+    except GoalApiError:
+        return []
+
+    horizon = now_utc + timedelta(days=_SCHEDULE_HORIZON_DAYS)
+    earliest = now_utc - timedelta(hours=2)
+    by_id: dict[str, dict[str, Any]] = {}
+
+    for lg in leagues:
+        try:
+            payload = client.fixtures_by_league(
+                lg.league_id,
+                status="SCHEDULED",
+                limit=_SCHEDULE_LIMIT_PER_LEAGUE,
+            )
+        except GoalApiError:
+            continue
+        for row in _unwrap_fixture_rows(payload):
+            if not _is_scheduled_status(row):
+                continue
+            # Extra safety: never invent; drop rows that already show goals.
+            try:
+                hs = row.get("homeTeamScore")
+                aws = row.get("awayTeamScore")
+                if hs is not None and hs != "" and int(hs) > 0:
+                    continue
+                if aws is not None and aws != "" and int(aws) > 0:
+                    continue
+            except (TypeError, ValueError):
+                pass
+            kickoff = _parse_kickoff_utc(row)
+            if kickoff is None or kickoff < earliest or kickoff > horizon:
+                continue
+            card = _scheduled_card(row, kickoff=kickoff)
+            fid = card.get("fixture_id") or ""
+            if not fid:
+                continue
+            prev = by_id.get(fid)
+            if prev is None or str(card["kickoff_utc"]) < str(prev.get("kickoff_utc") or ""):
+                by_id[fid] = card
+
+    cards = sorted(by_id.values(), key=lambda c: str(c.get("kickoff_utc") or ""))
+    cards = cards[:_SCHEDULE_DISPLAY_MAX]
+    if use_cache:
+        _schedule_cache["at"] = time.monotonic()
+        _schedule_cache["cards"] = list(cards)
+    return cards
 
 
 def _row_card(row: dict[str, Any]) -> dict[str, Any]:
@@ -290,7 +483,7 @@ def _component_rows(score: dict[str, Any] | None) -> list[dict[str, Any]]:
 
 
 def create_app() -> FastAPI:
-    app = FastAPI(title="Goal xG", version="0.4.1", docs_url="/docs")
+    app = FastAPI(title="Goal xG", version="0.4.2", docs_url="/docs")
     app.mount("/static", StaticFiles(directory=str(_WEB_DIR / "static")), name="static")
 
     @app.get("/health")
@@ -304,7 +497,7 @@ def create_app() -> FastAPI:
         return {
             "ok": True,
             "service": "goal-xg",
-            "version": "0.4.1",
+            "version": "0.4.2",
             "goal_api_key_configured": goal_key,
             "football_data_configured": fd_key,
         }
@@ -316,6 +509,7 @@ def create_app() -> FastAPI:
         error: str | None = None
         live_cards: list[dict[str, Any]] = []
         candidates: list[dict[str, Any]] = []
+        scheduled: list[dict[str, Any]] = []
         if client is None:
             error = "GOAL_API_KEY mancante. Imposta la key nel file .env (solo server)."
         else:
@@ -323,7 +517,9 @@ def create_app() -> FastAPI:
                 # One /fixtures/live fetch shared by board + live30 candidates (quota).
                 raw_live = _unwrap_live_rows(client)
                 rows = _big5_filter(client, raw_live)
-                live_cards = [_row_card(r) for r in rows]
+                live_cards = _sort_live_watch(
+                    _filter_live_00([_row_card(r) for r in rows])
+                )
                 candidates = [
                     _attach_board_xg(dict(c))
                     for c in list_live30_candidates(
@@ -334,6 +530,7 @@ def create_app() -> FastAPI:
                         in_window_only=True,
                     )
                 ]
+                scheduled = list_scheduled_big5(client)
             except GoalApiError as exc:
                 error = str(exc)
             finally:
@@ -354,6 +551,7 @@ def create_app() -> FastAPI:
                     live_cards, exclude_fixture_ids=candidate_ids
                 ),
                 "candidates": candidates,
+                "scheduled": scheduled,
                 "refresh_seconds": 30,
             },
         )
@@ -425,7 +623,7 @@ def create_app() -> FastAPI:
             # Single /fixtures/live for both board cards and candidates.
             raw_live = _unwrap_live_rows(client)
             rows = _big5_filter(client, raw_live)
-            cards = [_row_card(r) for r in rows]
+            cards = _sort_live_watch(_filter_live_00([_row_card(r) for r in rows]))
             candidates = [
                 _attach_board_xg(dict(c))
                 for c in list_live30_candidates(
@@ -436,7 +634,14 @@ def create_app() -> FastAPI:
                     in_window_only=True,
                 )
             ]
-            return JSONResponse({"live": cards, "live30_candidates": candidates})
+            scheduled = list_scheduled_big5(client)
+            return JSONResponse(
+                {
+                    "live": cards,
+                    "live30_candidates": candidates,
+                    "scheduled": scheduled,
+                }
+            )
         except GoalApiError as exc:
             raise HTTPException(status_code=502, detail=str(exc)) from exc
         finally:

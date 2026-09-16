@@ -3,7 +3,7 @@
 {% block content %}
 <header class="board-head">
   <h1>Live Big-5</h1>
-  <p>Board schematica · 0-0 tra 28′–32′ → indice prodotto.</p>
+  <p>Watchlist 0-0 (28′–32′ → indice) · partite in programma sotto.</p>
 </header>
 
 {% if error %}
@@ -40,7 +40,7 @@
 </div>
 {% endif %}
 
-<p class="section-label"><span class="live-pill">Live</span> Tutte le partite Big-5</p>
+<p class="section-label"><span class="live-pill">Live</span> Solo 0-0 Big-5</p>
 
 {% if league_groups %}
   {% for group in league_groups %}
@@ -67,12 +67,10 @@
           <span class="status-col">
             {% if c.xg_score is not none %}
             <span class="xg-badge {{ c.xg_tone }}" title="Indice prodotto xG">{{ c.xg_score }}</span>
-            {% elif c.is_00 %}
-            <span class="xg-badge">0-0</span>
-            {% elif c.minute is none %}
-            <span class="xg-badge">…</span>
+            {% elif c.in_window %}
+            <span class="window-pill">28–32′</span>
             {% else %}
-            <span class="live-pill">Live</span>
+            <span class="xg-badge">0-0</span>
             {% endif %}
           </span>
         </a>
@@ -81,7 +79,30 @@
     </ul>
   </section>
   {% endfor %}
-{% elif not live_cards %}
-<p class="empty">Nessuna partita live Big-5 (o API non raggiungibile).</p>
+{% else %}
+<p class="empty">Nessun 0-0 live Big-5 — vedi partite in programma.</p>
+{% endif %}
+
+<p class="section-label"><span class="sched-pill">In programma</span> Prossime Big-5</p>
+
+{% if scheduled %}
+<section class="league-group">
+  <ul class="match-list">
+    {% for c in scheduled %}
+    <li class="match-row">
+      <a class="match-link match-link--sched" href="/fixtures/{{ c.fixture_id }}">
+        <span class="minute-badge is-waiting kickoff-badge" title="Kickoff (Europe/Rome)">{{ c.kickoff_label }}</span>
+        <span class="teams">
+          <span class="team-name">{{ c.home_name }}</span>
+          <span class="team-name">{{ c.away_name }}</span>
+        </span>
+        <span class="league-col">{{ c.league_name }}</span>
+      </a>
+    </li>
+    {% endfor %}
+  </ul>
+</section>
+{% else %}
+<p class="empty">Nessuna partita in programma (o API non raggiungibile).</p>
 {% endif %}
 {% endblock %}

@@ -257,7 +257,8 @@ button:focus-visible,
 }
 
 .live-pill,
-.window-pill {
+.window-pill,
+.sched-pill {
   display: inline-flex;
   align-items: center;
   font-family: var(--mono);
@@ -268,7 +269,26 @@ button:focus-visible,
   color: var(--live);
 }
 .window-pill { color: var(--window); }
+.sched-pill { color: var(--accent); }
 .live-pill::before { content: none; }
+
+.match-link--sched {
+  grid-template-columns: 5.2rem minmax(0, 1fr) minmax(4rem, 7rem);
+}
+.kickoff-badge {
+  font-size: 0.62rem;
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+.league-col {
+  font-family: var(--mono);
+  font-size: 0.62rem;
+  color: var(--muted);
+  text-align: right;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 
 .xg-badge {
   font-family: var(--mono);

@@ -364,6 +364,8 @@ class GoalApiClient:
         """Fetch fixtures for YYYY-MM-DD; optionally filter by league id client-side later."""
         params: dict[str, Any] = {"date": date}
         if league_id is not None:
+            # GOAL API filters reliably on ``leagueId`` (``league`` alone is ignored).
+            params["leagueId"] = league_id
             params["league"] = league_id
         # Try common path shapes; GOAL docs use /fixtures
         return self.get("/fixtures", **params)
@@ -377,12 +379,16 @@ class GoalApiClient:
         *,
         season: int | None = None,
         status: str | None = "FT",
+        limit: int | None = None,
     ) -> Any:
-        params: dict[str, Any] = {"league": league_id}
+        # Prefer ``leagueId`` — provider ignores bare ``league`` for SCHEDULED lists.
+        params: dict[str, Any] = {"league": league_id, "leagueId": league_id}
         if season is not None:
             params["season"] = season
         if status is not None:
             params["status"] = status
+        if limit is not None:
+            params["limit"] = limit
         return self.get("/fixtures", **params)
 
     # --- Live / densified REST (Phase B — use sparingly; prefer WS) --------

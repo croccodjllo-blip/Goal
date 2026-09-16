@@ -36,15 +36,9 @@ def test_index_without_key_shows_alert(monkeypatch) -> None:
     assert "text/html" in resp.headers["content-type"]
     assert "GOAL_API_KEY" in resp.text
     assert "Live Big-5" in resp.text
+    assert "In programma" in resp.text
     assert "league-group" in resp.text or "match-list" in resp.text or "empty" in resp.text
     assert "Goal" in resp.text and "xG" in resp.text
-
-
-def test_api_live_fail_closed_without_key(monkeypatch) -> None:
-    monkeypatch.delenv("GOAL_API_KEY", raising=False)
-    client = TestClient(create_app())
-    resp = client.get("/api/live")
-    assert resp.status_code == 503
 
 
 def test_static_css(monkeypatch) -> None:
@@ -55,6 +49,8 @@ def test_static_css(monkeypatch) -> None:
     assert "--bg" in resp.text
     assert ".match-row" in resp.text
     assert ".live-pill" in resp.text
+    assert ".sched-pill" in resp.text
+    assert ".match-link--sched" in resp.text
     assert ".xg-ring" in resp.text
     assert ":focus-visible" in resp.text
     assert "--accent" in resp.text or "--brand-accent" in resp.text
@@ -140,14 +136,138 @@ def test_component_rows_only_available_shot_criteria() -> None:
     assert len(BASE_WEIGHTS) == 11
 
 
+def test_api_live_fail_closed_without_key(monkeypatch) -> None:
+    monkeypatch.delenv("GOAL_API_KEY", raising=False)
+    client = TestClient(create_app())
+    resp = client.get("/api/live")
+    assert resp.status_code == 503
+
+
+def test_filter_live_00_drops_scored() -> None:
+    from goal_xg.web.app import _filter_live_00, _sort_live_watch
+
+    cards = [
+        {"fixture_id": "a", "is_00": True, "in_window": False, "minute": 12},
+        {"fixture_id": "b", "is_00": False, "in_window": True, "minute": 30},
+        {"fixture_id": "c", "is_00": True, "in_window": True, "minute": 29},
+        {"fixture_id": "d", "is_00": True, "in_window": False, "minute": 40},
+    ]
+    kept = _filter_live_00(cards)
+    assert [c["fixture_id"] for c in kept] == ["a", "c", "d"]
+    ordered = _sort_live_watch(kept)
+    # Window first, then closer to 30′ (40 is nearer than 12).
+    assert [c["fixture_id"] for c in ordered] == ["c", "d", "a"]
+
+
+def test_list_scheduled_big5_orders_and_fail_closed(monkeypatch) -> None:
+    import httpx
+
+    from goal_xg.clients.goal_api import GoalApiClient
+    from goal_xg.web import app as webapp
+    from goal_xg.web.app import clear_schedule_cache, list_scheduled_big5
+
+    clear_schedule_cache()
+    leagues_body = {
+        "success": True,
+        "data": [
+            {"id": "pl1", "name": "Premier League", "country": "England"},
+            {"id": "pd1", "name": "La Liga", "country": "Spain"},
+            {"id": "sa1", "name": "Serie A", "country": "Italy"},
+            {"id": "bl1", "name": "Bundesliga", "country": "Germany"},
+            {"id": "fl1", "name": "Ligue 1", "country": "France"},
+        ],
+    }
+    by_league = {
+        "pl1": [
+            {
+                "id": "fx-late",
+                "matchStatus": "SCHEDULED",
+                "kickoffUtc": "2026-09-20T15:00:00.000Z",
+                "homeTeamName": "Arsenal",
+                "awayTeamName": "Leeds",
+                "leagueName": "Premier League",
+                "leagueId": "pl1",
+            },
+            {
+                "id": "fx-soon",
+                "matchStatus": "SCHEDULED",
+                "kickoffUtc": "2026-09-17T18:00:00.000Z",
+                "homeTeamName": "Chelsea",
+                "awayTeamName": "Brentford",
+                "leagueName": "Premier League",
+                "leagueId": "pl1",
+            },
+            {
+                "id": "fx-live-status",
+                "matchStatus": "LIVE",
+                "kickoffUtc": "2026-09-16T18:00:00.000Z",
+                "homeTeamName": "X",
+                "awayTeamName": "Y",
+                "leagueName": "Premier League",
+                "leagueId": "pl1",
+            },
+        ],
+        "pd1": [
+            {
+                "id": "fx-liga",
+                "matchStatus": "SCHEDULED",
+                "kickoffUtc": "2026-09-16T19:30:00.000Z",
+                "homeTeamName": "Levante",
+                "awayTeamName": "Ath Bilbao",
+                "leagueName": "La Liga",
+                "leagueId": "pd1",
+            }
+        ],
+    }
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        if path.endswith("/leagues"):
+            return httpx.Response(200, json=leagues_body)
+        if path.endswith("/fixtures"):
+            lid = request.url.params.get("leagueId") or request.url.params.get("league")
+            return httpx.Response(
+                200, json={"success": True, "data": by_league.get(str(lid), [])}
+            )
+        return httpx.Response(404, json={"error": "nf"})
+
+    transport = httpx.MockTransport(handler)
+    http = httpx.Client(
+        transport=transport,
+        base_url="https://api.goal-api.com/v1",
+        headers={"Authorization": "Bearer test"},
+    )
+    client = GoalApiClient(
+        api_key="test-key-not-real",
+        client=http,
+        cache_dir="/tmp/goal-xg-sched-cache",
+    )
+    from datetime import datetime, timezone
+
+    cards = list_scheduled_big5(
+        client,
+        now=datetime(2026, 9, 16, 18, 0, tzinfo=timezone.utc),
+        use_cache=False,
+    )
+    assert [c["fixture_id"] for c in cards] == ["fx-liga", "fx-soon", "fx-late"]
+    assert cards[0]["league_name"] == "La Liga"
+    assert "kickoff_label" in cards[0]
+    assert "fx-live-status" not in {c["fixture_id"] for c in cards}
+    http.close()
+    clear_schedule_cache()
+
+
 def test_index_and_api_live_share_one_fixtures_live(monkeypatch) -> None:
     """Quota fix: index / api.live must not double-hit /fixtures/live."""
     import httpx
 
     from goal_xg.clients.goal_api import GoalApiClient
     from goal_xg.web import app as webapp
+    from goal_xg.web.app import clear_schedule_cache
 
+    clear_schedule_cache()
     live_hits = {"n": 0}
+    fixtures_hits = {"n": 0}
     live_body = {
         "success": True,
         "data": [
@@ -160,6 +280,17 @@ def test_index_and_api_live_share_one_fixtures_live(monkeypatch) -> None:
                 "league": {"id": 135, "name": "Serie A"},
                 "homeTeamName": "A",
                 "awayTeamName": "B",
+                "leagueName": "Serie A",
+            },
+            {
+                "id": "fx-scored",
+                "matchElapsed": 40,
+                "matchPeriod": "FIRST_HALF",
+                "homeTeamScore": 1,
+                "awayTeamScore": 0,
+                "league": {"id": 135, "name": "Serie A"},
+                "homeTeamName": "E",
+                "awayTeamName": "F",
                 "leagueName": "Serie A",
             },
             {
@@ -193,6 +324,24 @@ def test_index_and_api_live_share_one_fixtures_live(monkeypatch) -> None:
             return httpx.Response(200, json=live_body)
         if path.endswith("/leagues"):
             return httpx.Response(200, json=leagues_body)
+        if path.endswith("/fixtures"):
+            fixtures_hits["n"] += 1
+            return httpx.Response(
+                200,
+                json={
+                    "success": True,
+                    "data": [
+                        {
+                            "id": "fx-sched",
+                            "matchStatus": "SCHEDULED",
+                            "kickoffUtc": "2026-09-18T18:00:00.000Z",
+                            "homeTeamName": "Home",
+                            "awayTeamName": "Away",
+                            "leagueName": "Serie A",
+                        }
+                    ],
+                },
+            )
         return httpx.Response(404, json={"error": "nf"})
 
     transport = httpx.MockTransport(handler)
@@ -214,26 +363,40 @@ def test_index_and_api_live_share_one_fixtures_live(monkeypatch) -> None:
 
     client = TestClient(create_app())
     live_hits["n"] = 0
+    fixtures_hits["n"] = 0
+    clear_schedule_cache()
     resp = client.get("/")
     assert resp.status_code == 200
     assert live_hits["n"] == 1
+    assert fixtures_hits["n"] == 5  # one SCHEDULED fetch per Big-5 league
     # Clock-only board: no shot stats → no invented xG badge number.
     assert resp.text.count("fx-live") == 1
+    assert "fx-scored" not in resp.text  # dropped when no longer 0-0
+    assert "In programma" in resp.text
+    assert "fx-sched" in resp.text
+    assert "Solo 0-0" in resp.text
     assert "brand-xg" in resp.text
     assert "tag-short" in resp.text
 
     live_hits["n"] = 0
+    fixtures_hits["n"] = 0
     resp = client.get("/api/live")
     assert resp.status_code == 200
     body = resp.json()
-    assert "live" in body and "live30_candidates" in body
+    assert "live" in body and "live30_candidates" in body and "scheduled" in body
     assert live_hits["n"] == 1
+    # Schedule cache should avoid a second wave of 5 fixtures calls.
+    assert fixtures_hits["n"] == 0
     live_by_id = {str(r["fixture_id"]): r for r in body["live"]}
+    assert "fx-scored" not in live_by_id
+    assert set(live_by_id) == {"fx-live", "fx-early"}
     # Fail-closed without shot stats.
     assert live_by_id["fx-live"]["xg_score"] is None
     assert live_by_id["fx-early"]["xg_score"] is None
     assert body["live30_candidates"][0]["xg_score"] is None
+    assert body["scheduled"][0]["fixture_id"] == "fx-sched"
     http.close()
+    clear_schedule_cache()
 
 
 def test_board_xg_helper() -> None:
