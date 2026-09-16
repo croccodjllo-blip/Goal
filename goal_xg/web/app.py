@@ -223,7 +223,11 @@ def _feature_rows(score: dict[str, Any] | None) -> list[dict[str, str]]:
         if raw is None or raw == "":
             continue
         label = _FEATURE_LABELS.get(str(key), str(key).replace("_", " "))
-        rows.append({"label": label, "value": str(raw)})
+        if isinstance(raw, float):
+            value = f"{raw:.3f}".rstrip("0").rstrip(".")
+        else:
+            value = str(raw)
+        rows.append({"label": label, "value": value})
     return rows
 
 
