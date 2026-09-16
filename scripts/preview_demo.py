@@ -195,6 +195,14 @@ def _demo_score(card: dict[str, Any]) -> dict[str, Any]:
             "goals_scored_last5_ha": 0.62,
             "standings": 0.58,
         },
+        extra_features={
+            "goals_scored_last5_ha_home_avg": 1.6,
+            "goals_scored_last5_ha_away_avg": 1.2,
+            "goals_scored_last5_ha_avg": 1.4,
+            "standings_home_rank": 3,
+            "standings_away_rank": 12,
+            "standings_label": "3ª–12ª",
+        },
     )
     data = live30_score_to_dict(result)
     notes = list(data.get("notes") or [])
@@ -291,6 +299,7 @@ def create_preview_app() -> FastAPI:
                 "band": _xg_band(int(xg) if xg is not None else None),
                 "feature_rows": _feature_rows(score_dict),
                 "component_rows": _component_rows(score_dict),
+                "settled_snapshot_rows": [],
             },
         )
 

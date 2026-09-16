@@ -169,7 +169,8 @@ def snapshot_from_clock(
     )
 
 
-def _shot_features(stats: LiveVolumeStats) -> dict[str, Any]:
+def shot_features_from_stats(stats: LiveVolumeStats) -> dict[str, Any]:
+    """Raw shot totals for features / fixture UI (None-preserving)."""
     return {
         "shots_total": stats.shots_total,
         "sot_total": stats.sot_total,
@@ -184,6 +185,10 @@ def _shot_features(stats: LiveVolumeStats) -> dict[str, Any]:
     }
 
 
+def _shot_features(stats: LiveVolumeStats) -> dict[str, Any]:
+    return shot_features_from_stats(stats)
+
+
 def score_live30(
     *,
     fixture_id: int | str,
@@ -194,6 +199,7 @@ def score_live30(
     stats: LiveVolumeStats | None = None,
     priors: PrematchPriors | None = None,
     extra_signals: Mapping[str, float] | None = None,
+    extra_features: Mapping[str, Any] | None = None,
     league_p_over05_given_00: float | None = None,
     weather_signal: float | None = None,
     weather_adverse: bool = False,
@@ -256,6 +262,12 @@ def score_live30(
         )
 
     if not snap.is_00:
+        # Settled: Over 0.5 already true. Do not invent component inputs.
+        settled_features: dict[str, Any] = {"settled": True}
+        if extra_features:
+            for k, v in extra_features.items():
+                if v is not None and v != "":
+                    settled_features[str(k)] = v
         return Live30Score(
             fixture_id=fixture_id,
             minute=snap.minute,
@@ -269,7 +281,7 @@ def score_live30(
             xg_score=100,
             settled=True,
             notes=tuple(notes + ["settled: already ≥1 goal @ ~30′"]),
-            features={"settled": True},
+            features=settled_features,
         )
 
     live_stats = stats or LiveVolumeStats(notes=("no_live_stats",))
@@ -303,6 +315,12 @@ def score_live30(
         weights = omit_and_renorm(omit=omit_set, available=available)
         notes.append("dynamic_weights=off")
 
+    features = _shot_features(live_stats)
+    if extra_features:
+        for k, v in extra_features.items():
+            if v is not None and v != "":
+                features[str(k)] = v
+
     if not weights:
         return Live30Score(
             fixture_id=fixture_id,
@@ -317,7 +335,7 @@ def score_live30(
             xg_score=0,
             skipped=True,
             skip_reason="no_usable_shot_stats",
-            features=_shot_features(live_stats),
+            features=features,
             notes=tuple(notes + ["fail-closed: no shot criteria available"]),
         )
 
@@ -336,7 +354,7 @@ def score_live30(
         xg_score=xg,
         weights_used=weights,
         signals=signals,
-        features=_shot_features(live_stats),
+        features=features,
         notes=tuple(notes),
     )
 

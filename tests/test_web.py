@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import pytest
 from fastapi.testclient import TestClient
 
 from goal_xg.web.app import create_app
@@ -59,6 +60,8 @@ def test_static_css(monkeypatch) -> None:
     assert ".components" in resp.text
     assert ".comp-row" in resp.text
     assert ".comp-head" in resp.text
+    assert ".comp-dato" in resp.text
+    assert ".settled-banner" in resp.text
     assert "prefers-reduced-motion" in resp.text
     assert "IBM Plex Mono" in resp.text or "IBM Plex Sans" in resp.text
     assert "radial-gradient" not in resp.text
@@ -78,7 +81,7 @@ def test_fixture_without_key(monkeypatch) -> None:
 
 def test_component_rows_only_available_shot_criteria() -> None:
     from goal_xg.model.weights import BASE_WEIGHTS, COMPONENT_LABELS_IT
-    from goal_xg.web.app import _component_rows
+    from goal_xg.web.app import _component_rows, _settled_snapshot_rows
 
     rows = _component_rows(
         {
@@ -95,6 +98,17 @@ def test_component_rows_only_available_shot_criteria() -> None:
                 "shots_total": 20.0,
                 "goals_scored_last5_ha": 10.0,
                 "standings": 10.0,
+            },
+            "features": {
+                "shots_total": 10,
+                "sot_total": 5,
+                "shot_xg_total": 0.87,
+                "goals_scored_last5_ha_home_avg": 1.6,
+                "goals_scored_last5_ha_away_avg": 1.2,
+                "goals_scored_last5_ha_avg": 1.4,
+                "standings_label": "3ª–12ª",
+                "standings_home_rank": 3,
+                "standings_away_rank": 12,
             },
         }
     )
@@ -114,6 +128,14 @@ def test_component_rows_only_available_shot_criteria() -> None:
     )
     assert by_id["standings"]["label"] == "Classifica"
     assert "34.0" in by_id["shot_xg"]["weight_display"]
+    # Raw live/prematch inputs surface clearly.
+    assert by_id["shots_total"]["raw_display"] == "10"
+    assert by_id["sot"]["raw_display"] == "5"
+    assert by_id["shot_xg"]["raw_display"] == "0.87"
+    assert by_id["goals_scored_last5_ha"]["raw_display"] == "1.4"
+    assert "casa" in (by_id["goals_scored_last5_ha"]["raw_detail"] or "")
+    assert by_id["standings"]["raw_display"] == "3ª–12ª"
+    assert by_id["shot_xg"]["contrib"] == pytest.approx(0.70 * 0.34)
     # Missing among the eleven → not listed.
     assert "xgot" not in by_id
     assert "woodwork" not in by_id
@@ -134,6 +156,21 @@ def test_component_rows_only_available_shot_criteria() -> None:
     empty = _component_rows(None)
     assert empty == []
     assert len(BASE_WEIGHTS) == 11
+
+    snap = _settled_snapshot_rows(
+        {
+            "settled": True,
+            "signals": {},
+            "features": {
+                "shots_total": 8,
+                "sot_total": 3,
+                "settled": True,
+            },
+        }
+    )
+    labels = {r["label"] for r in snap}
+    assert "Tiri totali" in labels
+    assert "Tiri in porta" in labels
 
 
 def test_api_live_fail_closed_without_key(monkeypatch) -> None:

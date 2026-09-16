@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
@@ -225,6 +225,12 @@ _FEATURE_LABELS: dict[str, str] = {
     "shots_blocked_total": "Tiri respinti",
     "shots_inside_box_total": "Tiri in area",
     "shots_outside_box_total": "Tiri da fuori",
+    "goals_scored_last5_ha_avg": "Media gol U5 (combinata)",
+    "goals_scored_last5_ha_home_avg": "Media gol U5 casa",
+    "goals_scored_last5_ha_away_avg": "Media gol U5 trasferta",
+    "standings_label": "Classifica (posizioni)",
+    "standings_home_rank": "Posizione casa",
+    "standings_away_rank": "Posizione trasferta",
     "source_half": "Fonte stats",
     "settled": "Settled",
     "prior_fallback": "Prior fallback",
@@ -233,6 +239,37 @@ _FEATURE_LABELS: dict[str, str] = {
 
 # Shot-index BASE_WEIGHTS → Italian labels (fixture «Indice — componenti»).
 _COMPONENT_LABELS: dict[str, str] = dict(COMPONENT_LABELS_IT)
+
+# Component id → features key holding the raw live/prematch input.
+_COMPONENT_RAW_KEYS: dict[str, str] = {
+    "shots_total": "shots_total",
+    "sot": "sot_total",
+    "shot_xg": "shot_xg_total",
+    "xgot": "xgot_total",
+    "woodwork": "woodwork_total",
+    "shots_off": "shots_off_total",
+    "shots_blocked": "shots_blocked_total",
+    "shots_inside_box": "shots_inside_box_total",
+    "shots_outside_box": "shots_outside_box_total",
+    "goals_scored_last5_ha": "goals_scored_last5_ha_avg",
+    "standings": "standings_label",
+}
+
+# Feature keys already shown in the componenti table (avoid duplicate list).
+_COMPONENT_COVERED_FEATURES: frozenset[str] = frozenset(
+    {
+        *_COMPONENT_RAW_KEYS.values(),
+        "goals_scored_last5_ha_home_avg",
+        "goals_scored_last5_ha_away_avg",
+        "goals_scored_last5_ha_home_n",
+        "goals_scored_last5_ha_away_n",
+        "standings_home_rank",
+        "standings_away_rank",
+        "standings_n_teams",
+        "standings_gap",
+        "settled",
+    }
+)
 
 
 def _group_by_league(
@@ -260,8 +297,53 @@ def _group_by_league(
     return [{"league_name": name, "matches": buckets[name]} for name in order]
 
 
+def _format_raw_value(raw: Any) -> str | None:
+    if raw is None or raw == "":
+        return None
+    if isinstance(raw, bool):
+        return "sì" if raw else "no"
+    if isinstance(raw, float):
+        if raw == int(raw) and abs(raw) >= 1:
+            return str(int(raw))
+        text = f"{raw:.3f}".rstrip("0").rstrip(".")
+        return text or "0"
+    if isinstance(raw, int):
+        return str(raw)
+    return str(raw)
+
+
+def _component_raw_display(
+    key: str, features: Mapping[str, Any]
+) -> tuple[str | None, str | None]:
+    """Return (raw_display, raw_detail) for a component id."""
+    if key == "goals_scored_last5_ha":
+        home = features.get("goals_scored_last5_ha_home_avg")
+        away = features.get("goals_scored_last5_ha_away_avg")
+        combined = features.get("goals_scored_last5_ha_avg")
+        if home is not None and away is not None:
+            h = _format_raw_value(home)
+            a = _format_raw_value(away)
+            detail = f"casa {h} · trasferta {a}"
+            primary = _format_raw_value(combined) if combined is not None else h
+            return primary, detail
+        return _format_raw_value(combined), None
+    if key == "standings":
+        label = features.get("standings_label")
+        if label:
+            return str(label), None
+        hr = features.get("standings_home_rank")
+        ar = features.get("standings_away_rank")
+        if hr is not None and ar is not None:
+            return f"{hr}ª–{ar}ª", None
+        return None, None
+    feat_key = _COMPONENT_RAW_KEYS.get(key)
+    if not feat_key:
+        return None, None
+    return _format_raw_value(features.get(feat_key)), None
+
+
 def _feature_rows(score: dict[str, Any] | None) -> list[dict[str, str]]:
-    """Live volume / formation stats only (not BASE_WEIGHTS ensemble dump)."""
+    """Leftover live metadata not already shown in componenti rows."""
     if not score:
         return []
     rows: list[dict[str, str]] = []
@@ -269,24 +351,28 @@ def _feature_rows(score: dict[str, Any] | None) -> list[dict[str, str]]:
     for key, raw in features.items():
         if raw is None or raw == "":
             continue
+        if str(key) in _COMPONENT_COVERED_FEATURES:
+            continue
         label = _FEATURE_LABELS.get(str(key), str(key).replace("_", " "))
-        if isinstance(raw, float):
-            value = f"{raw:.3f}".rstrip("0").rstrip(".")
-        else:
-            value = str(raw)
+        value = _format_raw_value(raw)
+        if value is None:
+            continue
         rows.append({"label": label, "value": value})
     return rows
 
 
 def _component_rows(score: dict[str, Any] | None) -> list[dict[str, Any]]:
-    """Only available index criteria (Attivo). No omit/absent rows."""
+    """Only available index criteria. Italian label + raw + weight + contrib."""
     signals: dict[str, Any] = {}
     weights: dict[str, Any] = {}
+    features: dict[str, Any] = {}
     if score:
         if isinstance(score.get("signals"), dict):
             signals = score["signals"]
         if isinstance(score.get("weights_used"), dict):
             weights = score["weights_used"]
+        if isinstance(score.get("features"), dict):
+            features = score["features"]
 
     rows: list[dict[str, Any]] = []
     order: list[str] = []
@@ -320,6 +406,12 @@ def _component_rows(score: dict[str, Any] | None) -> list[dict[str, Any]]:
         weight_display = (
             f"peso {w_pp:.1f}%" if w_pp is not None else f"base {base_w:.0f}%"
         )
+        contrib: float | None = None
+        contrib_display: str | None = None
+        if w_pp is not None:
+            contrib = sig * (w_pp / 100.0)
+            contrib_display = f"{contrib:.3f}".rstrip("0").rstrip(".")
+        raw_display, raw_detail = _component_raw_display(key, features)
         rows.append(
             {
                 "id": key,
@@ -328,16 +420,52 @@ def _component_rows(score: dict[str, Any] | None) -> list[dict[str, Any]]:
                 "status_label": "Attivo",
                 "value": sig,
                 "value_display": value_display,
+                "raw_display": raw_display,
+                "raw_detail": raw_detail,
                 "weight_pp": w_pp,
                 "base_pp": base_w,
                 "weight_display": weight_display,
+                "contrib": contrib,
+                "contrib_display": contrib_display,
+            }
+        )
+    return rows
+
+
+def _settled_snapshot_rows(score: dict[str, Any] | None) -> list[dict[str, str]]:
+    """When settled (no blend), list available raw shot inputs for the snapshot."""
+    if not score or not score.get("settled"):
+        return []
+    if score.get("signals"):
+        return []  # componenti table already covers active criteria
+    features = score.get("features") if isinstance(score.get("features"), dict) else {}
+    rows: list[dict[str, str]] = []
+    for comp_id, feat_key in _COMPONENT_RAW_KEYS.items():
+        if comp_id in ("goals_scored_last5_ha", "standings"):
+            raw_display, raw_detail = _component_raw_display(comp_id, features)
+            if not raw_display:
+                continue
+            label = _COMPONENT_LABELS.get(comp_id, comp_id)
+            value = raw_display if not raw_detail else f"{raw_display} ({raw_detail})"
+            rows.append({"label": label, "value": value})
+            continue
+        raw = features.get(feat_key)
+        if raw is None or raw == "":
+            continue
+        value = _format_raw_value(raw)
+        if value is None:
+            continue
+        rows.append(
+            {
+                "label": _COMPONENT_LABELS.get(comp_id, feat_key),
+                "value": value,
             }
         )
     return rows
 
 
 def create_app() -> FastAPI:
-    app = FastAPI(title="Goal xG", version="0.4.2", docs_url="/docs")
+    app = FastAPI(title="Goal xG", version="0.4.3", docs_url="/docs")
     app.mount("/static", StaticFiles(directory=str(_WEB_DIR / "static")), name="static")
 
     @app.get("/health")
@@ -351,7 +479,7 @@ def create_app() -> FastAPI:
         return {
             "ok": True,
             "service": "goal-xg",
-            "version": "0.4.2",
+            "version": "0.4.3",
             "goal_api_key_configured": goal_key,
             "football_data_configured": fd_key,
         }
@@ -434,6 +562,7 @@ def create_app() -> FastAPI:
                     "band": None,
                     "feature_rows": [],
                     "component_rows": [],
+                    "settled_snapshot_rows": [],
                 },
             )
         error: str | None = None
@@ -453,7 +582,9 @@ def create_app() -> FastAPI:
                         break
             if isinstance(row, dict):
                 card = _row_card(row)
-            scored = score_fixture_live30(client, fixture_id, fetch_history=False)
+            # Fixture detail densifies history + standings so Alessandro sees
+            # every available calculation input (U5 HA + classifica included).
+            scored = score_fixture_live30(client, fixture_id, fetch_history=True)
             score_dict = live30_score_to_dict(scored)
         except GoalApiError as exc:
             error = str(exc)
@@ -472,6 +603,7 @@ def create_app() -> FastAPI:
                 "band": _xg_band(int(xg) if xg is not None else None),
                 "feature_rows": _feature_rows(score_dict),
                 "component_rows": _component_rows(score_dict),
+                "settled_snapshot_rows": _settled_snapshot_rows(score_dict),
             },
         )
 

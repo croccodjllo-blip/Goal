@@ -11,7 +11,7 @@ builders accept the same finished-fixture shapes GOAL returns.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Any, Iterable, Mapping, Sequence
 
@@ -335,6 +335,32 @@ def _side_matches(
     return rows[-last_n:] if last_n > 0 else rows
 
 
+def raw_goals_scored_last5_ha(
+    finished: Sequence[Any],
+    home_team_id: int | str,
+    away_team_id: int | str,
+    *,
+    last_n: int = 5,
+    min_n: int = 1,
+) -> dict[str, float | int] | None:
+    """Side-specific last-N GF averages (UI / features). Omit if either side missing."""
+    rows = _as_rich(finished)
+    home_home = _side_matches(rows, home_team_id, side="home", last_n=last_n)
+    away_away = _side_matches(rows, away_team_id, side="away", last_n=last_n)
+    if len(home_home) < min_n or len(away_away) < min_n:
+        return None
+    home_avg = sum(m.goals_home for m in home_home) / len(home_home)
+    away_avg = sum(m.goals_away for m in away_away) / len(away_away)
+    combined = 0.5 * home_avg + 0.5 * away_avg
+    return {
+        "home_avg": float(home_avg),
+        "away_avg": float(away_avg),
+        "combined": float(combined),
+        "home_n": len(home_home),
+        "away_n": len(away_away),
+    }
+
+
 def signal_goals_scored_last5_ha(
     finished: Sequence[Any],
     home_team_id: int | str,
@@ -352,15 +378,16 @@ def signal_goals_scored_last5_ha(
     Fail-closed: omit if either side has fewer than ``min_n`` qualifying
     finished matches (no invented history).
     """
-    rows = _as_rich(finished)
-    home_home = _side_matches(rows, home_team_id, side="home", last_n=last_n)
-    away_away = _side_matches(rows, away_team_id, side="away", last_n=last_n)
-    if len(home_home) < min_n or len(away_away) < min_n:
+    raw = raw_goals_scored_last5_ha(
+        finished,
+        home_team_id,
+        away_team_id,
+        last_n=last_n,
+        min_n=min_n,
+    )
+    if raw is None:
         return None
-
-    home_avg = sum(m.goals_home for m in home_home) / len(home_home)
-    away_avg = sum(m.goals_away for m in away_away) / len(away_away)
-    combined = 0.5 * home_avg + 0.5 * away_avg
+    combined = float(raw["combined"])
 
     # Map combined GF/match avg → [0,1]. Mid≈1.2 (typical Big-5 side GF),
     # high≈2.5+ (strong dual attack). Sterile 0 → mild down.
@@ -438,12 +465,12 @@ def _team_rank(row: Mapping[str, Any]) -> tuple[str | None, int | None, int | No
     return tid_s, rank_i, played_i
 
 
-def signal_standings(
+def raw_standings(
     standings_payload: Any,
     home_team_id: int | str,
     away_team_id: int | str,
-) -> float | None:
-    """Rank-gap / table incentive signal. Omit if ranks missing."""
+) -> dict[str, int] | None:
+    """Home/away table ranks for UI. Omit if either rank missing."""
     table = _standings_table(standings_payload)
     if not table:
         return None
@@ -460,7 +487,24 @@ def signal_standings(
         return None
     if n_teams <= 1:
         n_teams = max(ranks.values()) if ranks else 20
-    rh, ra = ranks[hid], ranks[aid]
+    return {
+        "home_rank": int(ranks[hid]),
+        "away_rank": int(ranks[aid]),
+        "n_teams": int(n_teams),
+        "gap": abs(int(ranks[hid]) - int(ranks[aid])),
+    }
+
+
+def signal_standings(
+    standings_payload: Any,
+    home_team_id: int | str,
+    away_team_id: int | str,
+) -> float | None:
+    """Rank-gap / table incentive signal. Omit if ranks missing."""
+    raw = raw_standings(standings_payload, home_team_id, away_team_id)
+    if raw is None:
+        return None
+    rh, ra, n_teams = raw["home_rank"], raw["away_rank"], raw["n_teams"]
     gap = abs(rh - ra)
     # Mid-table scrapes and large gaps both tend to open games more than
     # two ultra-defensive top sides; keep a mild U-shape vs tight mid gap.
@@ -539,6 +583,8 @@ class ExtraSignalsResult:
     signals: dict[str, float]
     fatigue_flag: bool
     notes: tuple[str, ...]
+    # Raw inputs for fixture UI (only present when the matching signal is).
+    raw_features: dict[str, Any] = field(default_factory=dict)
 
 
 def build_extra_signals(
@@ -554,6 +600,7 @@ def build_extra_signals(
     """Build available extra signals; omit missing keys (fail-closed)."""
     hist = list(finished or [])
     signals: dict[str, float] = {}
+    raw_features: dict[str, Any] = {}
     notes: list[str] = []
 
     form = signal_form(
@@ -584,9 +631,15 @@ def build_extra_signals(
     else:
         notes.append("omit:matchup")
 
+    gf5_raw = raw_goals_scored_last5_ha(hist, home_team_id, away_team_id)
     gf5 = signal_goals_scored_last5_ha(hist, home_team_id, away_team_id)
-    if gf5 is not None:
+    if gf5 is not None and gf5_raw is not None:
         signals["goals_scored_last5_ha"] = gf5
+        raw_features["goals_scored_last5_ha_home_avg"] = gf5_raw["home_avg"]
+        raw_features["goals_scored_last5_ha_away_avg"] = gf5_raw["away_avg"]
+        raw_features["goals_scored_last5_ha_avg"] = gf5_raw["combined"]
+        raw_features["goals_scored_last5_ha_home_n"] = gf5_raw["home_n"]
+        raw_features["goals_scored_last5_ha_away_n"] = gf5_raw["away_n"]
     else:
         notes.append("omit:goals_scored_last5_ha")
 
@@ -596,9 +649,17 @@ def build_extra_signals(
     else:
         notes.append("omit:club_h2h")
 
+    stand_raw = raw_standings(standings_payload, home_team_id, away_team_id)
     stand = signal_standings(standings_payload, home_team_id, away_team_id)
-    if stand is not None:
+    if stand is not None and stand_raw is not None:
         signals["standings"] = stand
+        raw_features["standings_home_rank"] = stand_raw["home_rank"]
+        raw_features["standings_away_rank"] = stand_raw["away_rank"]
+        raw_features["standings_n_teams"] = stand_raw["n_teams"]
+        raw_features["standings_gap"] = stand_raw["gap"]
+        raw_features["standings_label"] = (
+            f"{stand_raw['home_rank']}ª–{stand_raw['away_rank']}ª"
+        )
     else:
         notes.append("omit:standings")
 
@@ -614,4 +675,5 @@ def build_extra_signals(
         signals=signals,
         fatigue_flag=fat_flag,
         notes=tuple(notes),
+        raw_features=raw_features,
     )

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
+import pytest
+
 from goal_xg.features.extractors import (
     EXTRA_SIGNAL_KEYS,
     RichFinished,
@@ -194,6 +196,10 @@ def test_build_extra_signals_and_live_wire() -> None:
     assert "goals_scored_last5_ha" in built.signals
     assert "standings" in built.signals
     assert set(built.signals).issubset(EXTRA_SIGNAL_KEYS)
+    assert built.raw_features.get("goals_scored_last5_ha_avg") == pytest.approx(1.5)
+    assert built.raw_features.get("standings_home_rank") == 3
+    assert built.raw_features.get("standings_away_rank") == 12
+    assert "3ª–12ª" in str(built.raw_features.get("standings_label"))
 
     scored = score_live30(
         fixture_id="fx",
@@ -203,6 +209,7 @@ def test_build_extra_signals_and_live_wire() -> None:
         score_away=0,
         stats=LiveVolumeStats(sot_home=2, sot_away=1, source_half="firstHalf"),
         extra_signals=built.signals,
+        extra_features=built.raw_features,
         fatigue_flag=built.fatigue_flag,
         league_p_over05_given_00=0.75,
     )
@@ -213,6 +220,8 @@ def test_build_extra_signals_and_live_wire() -> None:
     assert "goals_scored_last5_ha" in scored.signals
     assert "standings" in scored.weights_used
     assert "standings" in scored.signals
+    assert scored.features.get("goals_scored_last5_ha_avg") == pytest.approx(1.5)
+    assert scored.features.get("standings_label") == "3ª–12ª"
     # Other prematch extractors still ignored (not in BASE_WEIGHTS).
     assert "form" not in scored.weights_used
     assert "club_h2h" not in scored.weights_used

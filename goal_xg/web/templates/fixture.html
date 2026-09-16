@@ -42,37 +42,65 @@
 {% endif %}
 
 {% if score %}
+{% if score.settled %}
+<section class="settled-banner" aria-label="Indice settled">
+  <p><strong>Settled</strong> — già ≥1 gol. Indice = 100 (Over 0.5 realizzato). Nessun dato inventato.</p>
+</section>
+{% endif %}
+
 {% if component_rows %}
 <section class="components" aria-labelledby="comp-heading">
   <h2 id="comp-heading">Indice — componenti</h2>
   <p class="components-intro">
-    Criteri disponibili per questa partita (Attivo). Valore segnale 0–1 e peso % dopo rinormalizzazione.
+    Dati usati per il calcolo (solo presenti). Dato grezzo live/prematch, segnale 0–1, peso % dopo rinormalizzazione, contributo al blend.
   </p>
   <div class="comp-head" aria-hidden="true">
     <span>Criterio</span>
-    <span class="col-val">Valore</span>
+    <span class="col-dato">Dato</span>
+    <span class="col-val">Segnale</span>
     <span class="col-w">Peso</span>
+    <span class="col-c">Contrib</span>
   </div>
   <ul class="comp-list">
     {% for row in component_rows %}
     <li class="comp-row is-{{ row.status }}">
       <div class="comp-main">
         <span class="comp-label">{{ row.label }}</span>
-        <span class="comp-id">{{ row.id }} · base {{ '%.0f'|format(row.base_pp) }}%</span>
+        <span class="comp-id">{{ row.id }} · base {{ '%.0f'|format(row.base_pp) }}%{% if row.raw_detail %} · {{ row.raw_detail }}{% endif %}</span>
       </div>
       <div class="comp-meta">
         <span class="comp-status {{ row.status }}">{{ row.status_label }}</span>
         <span class="comp-values">
-          {% if row.status == 'active' %}
+          <span class="comp-dato">{% if row.raw_display %}{{ row.raw_display }}{% else %}—{% endif %}</span>
           <span class="comp-val">{{ row.value_display }}</span>
           <span class="comp-w">{% if row.weight_pp is not none %}{{ '%.1f'|format(row.weight_pp) }}%{% else %}{{ '%.0f'|format(row.base_pp) }}%{% endif %}</span>
+          <span class="comp-c">{% if row.contrib_display %}{{ row.contrib_display }}{% else %}—{% endif %}</span>
           <span class="w">{{ row.weight_display }}</span>
-          {% endif %}
         </span>
       </div>
     </li>
     {% endfor %}
   </ul>
+</section>
+{% elif score.settled and settled_snapshot_rows %}
+<section class="components" aria-labelledby="snap-heading">
+  <h2 id="snap-heading">Snapshot stats (settled)</h2>
+  <p class="components-intro">
+    Stats disponibili al momento del gol — non usate per ricalcolare l’indice (già 100).
+  </p>
+  <dl class="settled-snap">
+    {% for row in settled_snapshot_rows %}
+    <div class="feat-row">
+      <dt>{{ row.label }}</dt>
+      <dd>{{ row.value }}</dd>
+    </div>
+    {% endfor %}
+  </dl>
+</section>
+{% elif score.settled %}
+<section class="components" aria-labelledby="snap-heading">
+  <h2 id="snap-heading">Snapshot stats (settled)</h2>
+  <p class="components-intro">Nessuna statistica tiro disponibile nello snapshot — indice settled a 100.</p>
 </section>
 {% endif %}
 
@@ -103,7 +131,7 @@
 
 {% if feature_rows %}
 <section class="features">
-  <h2>Stats live @30′</h2>
+  <h2>Altri dati</h2>
   <dl>
     {% for row in feature_rows %}
     <div class="feat-row">

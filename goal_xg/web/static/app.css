@@ -516,6 +516,24 @@ button:focus-visible,
   color: var(--muted);
   border-bottom: 1px solid var(--line-soft);
 }
+.settled-banner {
+  margin: 0;
+  padding: 0.55rem 0.85rem;
+  background: var(--accent-dim);
+  border-bottom: 1px solid var(--line);
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+}
+.settled-banner p { margin: 0; }
+.settled-banner strong {
+  color: var(--accent);
+  font-family: var(--mono);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-size: 0.72rem;
+}
+.settled-snap { margin: 0; }
 .comp-list {
   list-style: none;
   margin: 0;
@@ -523,27 +541,29 @@ button:focus-visible,
 }
 .comp-head {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 4.2rem 4.6rem;
-  gap: 0.5rem;
+  grid-template-columns: minmax(0, 1fr) 3.4rem 3.6rem 3.6rem 3.4rem;
+  gap: 0.35rem;
   padding: 0.4rem 0.85rem;
   border-bottom: 1px solid var(--line);
   font-family: var(--mono);
-  font-size: 0.62rem;
+  font-size: 0.58rem;
   font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--muted);
   background: var(--bg);
 }
+.comp-head .col-dato,
 .comp-head .col-val,
-.comp-head .col-w { text-align: right; }
+.comp-head .col-w,
+.comp-head .col-c { text-align: right; }
 
 .comp-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 4.2rem 4.6rem;
-  gap: 0.5rem;
+  grid-template-columns: minmax(0, 1fr) 3.4rem 3.6rem 3.6rem 3.4rem;
+  gap: 0.35rem;
   align-items: center;
-  padding: 0.62rem 0.85rem;
+  padding: 0.55rem 0.85rem;
   border-bottom: 1px solid var(--line-soft);
   min-height: 2.55rem;
 }
@@ -559,14 +579,14 @@ button:focus-visible,
   gap: 0.1rem;
 }
 .comp-label {
-  font-size: 0.9rem;
+  font-size: 0.86rem;
   font-weight: 550;
   color: var(--text);
   line-height: 1.25;
 }
 .comp-id {
   font-family: var(--mono);
-  font-size: 0.62rem;
+  font-size: 0.58rem;
   font-weight: 400;
   color: var(--muted);
   letter-spacing: 0.01em;
@@ -582,16 +602,20 @@ button:focus-visible,
   font-family: var(--mono);
   font-variant-numeric: tabular-nums;
 }
+.comp-dato,
 .comp-val,
-.comp-w {
+.comp-w,
+.comp-c {
   font-family: var(--mono);
-  font-size: 0.88rem;
+  font-size: 0.8rem;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   text-align: right;
 }
-.comp-val { color: var(--text); }
+.comp-dato { color: var(--text); }
+.comp-val { color: var(--text-secondary); font-weight: 500; }
 .comp-w { color: var(--accent); }
+.comp-c { color: var(--muted); font-weight: 500; }
 .comp-values .w { display: none; }
 
 .api-link {
@@ -627,13 +651,15 @@ button:focus-visible,
   .xg-num { font-size: 2.7rem; }
   .comp-head,
   .comp-row {
-    grid-template-columns: minmax(0, 1fr) 5rem 5.2rem;
+    grid-template-columns: minmax(0, 1fr) 4.2rem 4.4rem 4.4rem 4.2rem;
     padding-left: 1rem;
     padding-right: 1rem;
   }
-  .comp-label { font-size: 0.95rem; }
+  .comp-label { font-size: 0.92rem; }
+  .comp-dato,
   .comp-val,
-  .comp-w { font-size: 0.95rem; }
+  .comp-w,
+  .comp-c { font-size: 0.9rem; }
 }
 
 @media (prefers-reduced-motion: reduce) {

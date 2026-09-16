@@ -272,17 +272,11 @@ def score_fixture_live30(
             score_away=away,
         )
 
-    # Settled inside window → no stats needed.
-    if not is_score_00(home, away):
-        return score_live30(
-            fixture_id=fixture_id,
-            minute=minute,
-            period=period,
-            score_home=home,
-            score_away=away,
-        )
+    settled = not is_score_00(home, away)
 
     # Densify: statistics (prefer firstHalf) + optional cards/subs/lineups.
+    # Also for settled-in-window: fetch stats for a final snapshot (display),
+    # never invent index signals (score stays 100 settled).
     stats_payload = client.fixture_statistics(fixture_id, half="1half")
     stats = parse_statistics_payload(stats_payload)
 
@@ -321,8 +315,22 @@ def score_fixture_live30(
         goalscorer=list(state.goals) if state.goals else None,
     )
 
+    if settled:
+        # Snapshot features only — do not blend into index.
+        from goal_xg.live30.score import shot_features_from_stats
+
+        return score_live30(
+            fixture_id=fixture_id,
+            minute=minute,
+            period=period,
+            score_home=home,
+            score_away=away,
+            extra_features=shot_features_from_stats(stats),
+        )
+
     priors: PrematchPriors | None = None
     extra_signals: dict[str, float] | None = None
+    extra_features: dict[str, Any] | None = None
     fatigue_flag = False
 
     hid, aid = _extract_team_ids(fixture_row)
@@ -378,6 +386,8 @@ def score_fixture_live30(
         )
         if built.signals:
             extra_signals = built.signals
+        if built.raw_features:
+            extra_features = dict(built.raw_features)
         fatigue_flag = built.fatigue_flag
 
     league_p = resolve_league_p(
@@ -396,6 +406,7 @@ def score_fixture_live30(
         stats=stats,
         priors=priors,
         extra_signals=extra_signals,
+        extra_features=extra_features,
         league_p_over05_given_00=league_p,
         weather_signal=weather_signal,
         fatigue_flag=fatigue_flag,
