@@ -228,10 +228,13 @@ def list_todays_big5_fixtures(
     *,
     day: date | str | None = None,
     use_cache: bool = True,
+    prefer_disk: bool = True,
 ) -> list[dict[str, Any]]:
     """Today's Big-5 fixtures via GOAL ``from``/``to`` + leagueId.
 
     One REST call per Big-5 league (≤5). Cached briefly for index refresh.
+    When ``prefer_disk`` and a ``daily-refresh`` snapshot exists for the day,
+    seed from disk first (still overwritten by a successful live fetch).
     """
     if isinstance(day, date):
         day_s = day.isoformat()
@@ -249,16 +252,36 @@ def list_todays_big5_fixtures(
     ):
         return list(_schedule_cache["rows"])
 
+    disk_cards: list[dict[str, Any]] = []
+    if prefer_disk:
+        try:
+            from goal_xg.jobs.store import DailyStore
+
+            blob = DailyStore().load_fixtures(day_s)
+            if isinstance(blob, dict):
+                rows = blob.get("fixtures")
+                if isinstance(rows, list):
+                    disk_cards = [r for r in rows if isinstance(r, dict)]
+        except Exception:
+            disk_cards = []
+
     try:
         leagues = client.discover_big5_leagues()
     except Exception:
+        if disk_cards:
+            _schedule_cache["key"] = day_s
+            _schedule_cache["expires"] = now + _SCHEDULE_TTL_SEC
+            _schedule_cache["rows"] = list(disk_cards)
+            return list(disk_cards)
         return []
 
     cards: list[dict[str, Any]] = []
     seen: set[str] = set()
+    live_ok = False
     for lg in leagues:
         try:
             payload = client.fixtures_by_date(day_s, league_id=lg.league_id)
+            live_ok = True
         except Exception:
             continue
         for row in unwrap_fixture_rows(payload):
@@ -271,6 +294,11 @@ def list_todays_big5_fixtures(
             if not card.get("league_name"):
                 card["league_name"] = lg.name
             cards.append(card)
+
+    if not cards and disk_cards:
+        cards = list(disk_cards)
+    elif not live_ok and disk_cards and not cards:
+        cards = list(disk_cards)
 
     cards.sort(
         key=lambda c: (

@@ -568,7 +568,7 @@ def _load_api_sports_dump_for_fixture(
 
 
 def create_app() -> FastAPI:
-    app = FastAPI(title="Goal xG", version="0.5.0", docs_url="/docs")
+    app = FastAPI(title="Goal xG", version="0.5.1", docs_url="/docs")
     app.mount("/static", StaticFiles(directory=str(_WEB_DIR / "static")), name="static")
 
     @app.get("/health")
@@ -583,13 +583,30 @@ def create_app() -> FastAPI:
             os.environ.get("API_SPORTS_KEY", "").strip()
             or os.environ.get("APISPORTS_KEY", "").strip()
         )
+        daily_meta: dict[str, Any] | None = None
+        try:
+            from goal_xg.jobs.store import DailyStore
+
+            meta = DailyStore().load_meta()
+            if isinstance(meta, dict):
+                daily_meta = {
+                    "ok": meta.get("ok"),
+                    "as_of_day": meta.get("as_of_day"),
+                    "ran_at_utc": meta.get("ran_at_utc"),
+                    "fixtures_count": meta.get("fixtures_count"),
+                    "teams_count": meta.get("teams_count"),
+                    "leagues_ok": meta.get("leagues_ok"),
+                }
+        except Exception:
+            daily_meta = None
         return {
             "ok": True,
             "service": "goal-xg",
-            "version": "0.5.0",
+            "version": "0.5.1",
             "goal_api_key_configured": goal_key,
             "football_data_configured": fd_key,
             "api_sports_configured": api_sports_key,
+            "daily_refresh": daily_meta,
         }
 
     @app.get("/", response_class=HTMLResponse)

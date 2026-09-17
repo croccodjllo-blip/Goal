@@ -99,14 +99,25 @@ goal-xg watch-live --list-only
 goal-xg watch-live --list-only --score
 goal-xg score-live30 --fixture-id 12345678
 goal-xg coach --team-id 86
+goal-xg daily-refresh            # fixtures + season-to-date team stats → disk
+```
+
+### Daily refresh (systemd)
+
+```bash
+# once on the VPS:
+sudo bash scripts/install-daily-refresh-timer.sh
+# timer: 05:00 UTC → goal-xg daily-refresh
+# artifacts: .cache/goal_api/daily/{fixtures,history,standings,team_stats}_*
 ```
 
 ## Package layout
 
 ```text
 goal_xg/
-  clients/          # GOAL REST/WS + football-data.org
+  clients/          # GOAL REST/WS + football-data.org + API-Sports
   features/         # prematch priors + extractors (form/streaks/…)
+  jobs/             # daily fixtures + team-stats refresh
   live30/           # Phase B window / stats / score / service
   model/            # weights + dynamic shifts + calibration + xG
   backtest/         # historical 0-0@30′ harness (Brier / reliability)

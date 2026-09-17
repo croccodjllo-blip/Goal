@@ -2,6 +2,9 @@
 
 WS-first for clock/score; REST statistics / lineups only when a fixture is
 0-0 inside the 28–32′ window (GOAL ~1000 req/day).
+
+When ``daily-refresh`` has persisted FT history / standings, prefer those
+disk snapshots for prematch signals (U5 HA, classifica) to save quota.
 """
 
 from __future__ import annotations
@@ -13,6 +16,7 @@ from goal_xg.clients.goal_api import GoalApiClient, _as_league_id
 from goal_xg.clients.goal_ws import LiveMatchState, parse_match_update
 from goal_xg.features.extractors import build_extra_signals
 from goal_xg.features.prematch import PrematchPriors, compute_prematch_priors
+from goal_xg.jobs.store import DailyStore
 from goal_xg.live30.score import Live30Score, score_live30
 from goal_xg.live30.stats import merge_events_into_stats, parse_statistics_payload
 from goal_xg.live30.window import (
@@ -26,6 +30,53 @@ from goal_xg.model.calibration import (
     League00At30Calib,
     resolve_league_p,
 )
+
+
+def _daily_store() -> DailyStore:
+    return DailyStore()
+
+
+def _cached_history_for_league(league_id: Any) -> list[dict[str, Any]]:
+    """Load season-to-date FT rows from daily store when available."""
+    if league_id is None:
+        return []
+    store = _daily_store()
+    code = store.find_league_code_for_id(league_id)
+    if code:
+        rows = store.load_history_rows(code)
+        if rows:
+            return rows
+    # Fallback: scan all history_* files for matching league_id.
+    if not store.root.is_dir():
+        return []
+    for path in sorted(store.root.glob("history_*.json")):
+        blob = store.load_history(path.stem.replace("history_", ""))
+        if not isinstance(blob, dict):
+            continue
+        if str(blob.get("league_id") or "") == str(league_id).strip():
+            rows = blob.get("fixtures")
+            return [r for r in rows if isinstance(r, dict)] if isinstance(rows, list) else []
+    return []
+
+
+def _cached_standings_for_league(league_id: Any) -> Any | None:
+    if league_id is None:
+        return None
+    store = _daily_store()
+    code = store.find_league_code_for_id(league_id)
+    if code:
+        payload = store.load_standings_payload(code)
+        if payload is not None:
+            return payload
+    if not store.root.is_dir():
+        return None
+    for path in sorted(store.root.glob("standings_*.json")):
+        blob = store.load_standings(path.stem.replace("standings_", ""))
+        if not isinstance(blob, dict):
+            continue
+        if str(blob.get("league_id") or "") == str(league_id).strip():
+            return blob.get("payload")
+    return None
 
 
 def _unwrap_list(payload: Any) -> list[dict[str, Any]]:
@@ -425,25 +476,35 @@ def score_fixture_live30(
 
     hist_rows: list[dict[str, Any]] = []
     if fetch_history and hid is not None and aid is not None and league_id is not None:
-        try:
-            hist = client.fixtures_by_league(league_id, season=season, status="FT")
-            hist_rows = _unwrap_list(hist)
-            priors = compute_prematch_priors(
-                home_team_id=hid,
-                away_team_id=aid,
-                finished=hist_rows,
-                fixture_id=fixture_id,
-            )
-        except Exception:
+        # Prefer daily-refresh snapshot (season-to-date as of last job run).
+        hist_rows = _cached_history_for_league(league_id)
+        if not hist_rows:
+            try:
+                hist = client.fixtures_by_league(league_id, season=season, status="FT")
+                hist_rows = _unwrap_list(hist)
+            except Exception:
+                hist_rows = []
+        if hist_rows:
+            try:
+                priors = compute_prematch_priors(
+                    home_team_id=hid,
+                    away_team_id=aid,
+                    finished=hist_rows,
+                    fixture_id=fixture_id,
+                )
+            except Exception:
+                priors = None
+        else:
             priors = None
-            hist_rows = []
 
     standings_payload: Any = None
     if fetch_standings and league_id is not None:
-        try:
-            standings_payload = client.league_standings(league_id, season=season)
-        except Exception:
-            standings_payload = None
+        standings_payload = _cached_standings_for_league(league_id)
+        if standings_payload is None:
+            try:
+                standings_payload = client.league_standings(league_id, season=season)
+            except Exception:
+                standings_payload = None
 
     h2h_rows: list[dict[str, Any]] = []
     if fetch_h2h and hid is not None and aid is not None:

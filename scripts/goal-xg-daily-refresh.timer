@@ -1,0 +1,10 @@
+[Unit]
+Description=Run Goal xG daily fixtures + team stats refresh (05:00 UTC)
+
+[Timer]
+OnCalendar=*-*-* 05:00:00 UTC
+Persistent=true
+Unit=goal-xg-daily-refresh.service
+
+[Install]
+WantedBy=timers.target

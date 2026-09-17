@@ -1,9 +1,10 @@
-"""CLI: leagues, fixtures, score-prematch, coach, watch-live, score-live30."""
+"""CLI: leagues, fixtures, score-prematch, coach, watch-live, score-live30, daily-refresh."""
 
 from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
 import sys
 from pathlib import Path
@@ -17,6 +18,8 @@ from goal_xg.clients.goal_api import GoalApiClient, GoalApiError, _as_league_id
 from goal_xg.clients.goal_ws import GoalWsClient
 from goal_xg.features.extractors import build_extra_signals
 from goal_xg.features.prematch import FinishedFixture, compute_prematch_priors
+from goal_xg.jobs.daily_refresh import run_daily_refresh
+from goal_xg.jobs.store import DailyStore, default_daily_cache_dir
 from goal_xg.live30.service import (
     list_live30_candidates,
     live30_score_to_dict,
@@ -448,6 +451,55 @@ def score_live30_cmd(
             _dump(out)
             if result.skipped:
                 raise typer.Exit(code=2)
+    except GoalApiError as exc:
+        typer.secho(str(exc), fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=1) from exc
+
+
+@app.command("daily-refresh")
+def daily_refresh_cmd(
+    day: Optional[str] = typer.Option(
+        None,
+        "--day",
+        help="Europe/Rome calendar day YYYY-MM-DD (default: oggi)",
+    ),
+    no_tomorrow: bool = typer.Option(
+        False,
+        "--no-tomorrow",
+        help="Skip tomorrow's programme fetch (saves ~5 REST calls)",
+    ),
+    season: Optional[int] = typer.Option(
+        None, "--season", help="Override season year for history/standings"
+    ),
+    cache_dir: Optional[str] = typer.Option(
+        None,
+        "--cache-dir",
+        help="Daily store root (default: GOAL_API_CACHE_DIR/daily)",
+    ),
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Log per-league warnings"),
+) -> None:
+    """Daily job: refresh Big-5 fixtures + season-to-date team stats to disk.
+
+    Persists under ``.cache/goal_api/daily/`` (or ``--cache-dir``): today's
+    programme, FT history, standings, and per-team HA rates / U5 GF / ranks.
+    Intended for systemd timer / cron (~05:00 UTC). GOAL primary; ~16–21 REST.
+    """
+    if verbose:
+        logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
+    try:
+        with _client() as client:
+            root = Path(cache_dir) if cache_dir else default_daily_cache_dir()
+            store = DailyStore(root)
+            result = run_daily_refresh(
+                client,
+                store=store,
+                day=day,
+                include_tomorrow=not no_tomorrow,
+                season=season,
+            )
+            _dump(result.to_dict())
+            if not result.ok:
+                raise typer.Exit(code=1)
     except GoalApiError as exc:
         typer.secho(str(exc), fg=typer.colors.RED, err=True)
         raise typer.Exit(code=1) from exc

@@ -1,0 +1,16 @@
+[Unit]
+Description=Goal xG daily fixtures + team stats refresh
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/goal-xg
+EnvironmentFile=-/opt/goal-xg/.env
+Environment=GOAL_API_CACHE_DIR=/opt/goal-xg/.cache/goal_api
+ExecStart=/opt/goal-xg/.venv/bin/goal-xg daily-refresh --verbose
+User=root
+Nice=10
+
+# Fail-closed: non-zero exit leaves the previous day's disk snapshot in place.
+SuccessExitStatus=0
