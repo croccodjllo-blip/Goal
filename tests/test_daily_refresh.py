@@ -46,7 +46,26 @@ def _ft_row(
     }
 
 
-def test_compute_team_stats_side_rates_and_standings() -> None:
+def test_as_finished_parses_goal_flat_scores() -> None:
+    from goal_xg.features.prematch import _as_finished
+
+    rows = _as_finished(
+        [
+            {
+                "homeTeamId": "t-home",
+                "awayTeamId": "t-away",
+                "homeTeamFtScore": "2",
+                "awayTeamFtScore": "1",
+                "leagueId": "lg1",
+            }
+        ]
+    )
+    assert len(rows) == 1
+    assert rows[0].home_team_id == "t-home"
+    assert rows[0].away_team_id == "t-away"
+    assert rows[0].goals_home == 2
+    assert rows[0].goals_away == 1
+
     lg = _league()
     hist = [
         _ft_row(hid="1", aid="99", gh=2, ga=0, home_name="Alpha"),

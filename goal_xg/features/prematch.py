@@ -75,10 +75,22 @@ def _as_finished(rows: Iterable[Any]) -> list[FinishedFixture]:
         aid = row.get("away_team_id") or away.get("id") or row.get("awayTeamId")
         gh = row.get("goals_home")
         if gh is None:
-            gh = goals.get("home") if goals else row.get("homeScore")
+            gh = goals.get("home") if goals else None
+        if gh is None:
+            gh = (
+                row.get("homeTeamFtScore")
+                or row.get("homeTeamScore")
+                or row.get("homeScore")
+            )
         ga = row.get("goals_away")
         if ga is None:
-            ga = goals.get("away") if goals else row.get("awayScore")
+            ga = goals.get("away") if goals else None
+        if ga is None:
+            ga = (
+                row.get("awayTeamFtScore")
+                or row.get("awayTeamScore")
+                or row.get("awayScore")
+            )
         if hid is None or aid is None or gh is None or ga is None:
             continue
         try:
