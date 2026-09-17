@@ -1,10 +1,12 @@
 {% extends "base.html" %}
 {% block title %}xG · {{ card.home_name if card else fixture_id }}{% endblock %}
 {% block content %}
-<p class="back"><a href="/">← Live board</a></p>
+<nav class="back" aria-label="Navigazione">
+  <a href="/"><span aria-hidden="true">←</span> Live board</a>
+</nav>
 
 {% if error %}
-<div class="alert">{{ error }}</div>
+<div class="alert" role="alert">{{ error }}</div>
 {% endif %}
 
 {% if card %}
@@ -15,8 +17,10 @@
       <p class="name">{{ card.home_name }}</p>
     </div>
     <div class="center">
-      <div class="score">
-        {{ card.score_home if card.score_home is not none else "–" }}-{{ card.score_away if card.score_away is not none else "–" }}
+      <div class="score" aria-label="Punteggio">
+        <span>{{ card.score_home if card.score_home is not none else "–" }}</span>
+        <span class="score-sep">-</span>
+        <span>{{ card.score_away if card.score_away is not none else "–" }}</span>
       </div>
       <div class="clock">
         {% if card.minute is not none %}
@@ -26,7 +30,7 @@
           {% if card.period %}<span class="muted">· {{ card.period }}</span>{% endif %}
         </span>
         {% else %}
-        <span>—</span>
+        <span class="clock-idle">—</span>
         {% endif %}
       </div>
     </div>
@@ -48,39 +52,72 @@
 </section>
 {% endif %}
 
+<section class="xg-panel">
+  {% set xg = score.xg_score if score.xg_score is not none else 0 %}
+  {% set ring_color = 'var(--accent)' if xg >= 60 else ('var(--xg-mid)' if xg >= 40 else 'var(--xg-low)') %}
+  <div class="xg-panel-inner">
+    <div
+      class="xg-ring"
+      style="--pct: {{ xg }}; --ring-color: {{ ring_color }};"
+      role="img"
+      aria-label="Indice xG {{ xg }} su 100"
+    >
+      <div class="xg-ring-core">
+        <div class="xg-num{% if score.settled %} settled{% endif %}">{{ score.xg_score }}</div>
+        <p class="xg-label">Indice · {{ band }}</p>
+      </div>
+    </div>
+    <div class="xg-meta">
+      <p class="xg-sub">
+        p(Over 0.5 FT) ≈ {{ '%.0f'|format(score.p_over05_ft * 100) }}%
+        {% if score.in_window %} · finestra 28–32′{% endif %}
+        {% if score.settled %} · settled{% endif %}
+        {% if score.skipped %} · skipped: {{ score.skip_reason }}{% endif %}
+      </p>
+      {% if score.notes %}
+      <ul class="notes">
+        {% for n in score.notes %}<li>{{ n }}</li>{% endfor %}
+      </ul>
+      {% endif %}
+    </div>
+  </div>
+</section>
+
 {% if component_rows %}
 <section class="components" aria-labelledby="comp-heading">
   <h2 id="comp-heading">Indice — componenti</h2>
   <p class="components-intro">
     Dati usati per il calcolo (solo presenti). Dato grezzo live/prematch, segnale 0–1, peso % dopo rinormalizzazione, contributo al blend.
   </p>
-  <div class="comp-head" aria-hidden="true">
-    <span>Criterio</span>
-    <span class="col-dato">Dato</span>
-    <span class="col-val">Segnale</span>
-    <span class="col-w">Peso</span>
-    <span class="col-c">Contrib</span>
+  <div class="table-scroll" role="region" aria-label="Tabella componenti indice" tabindex="0">
+    <div class="comp-head" aria-hidden="true">
+      <span>Criterio</span>
+      <span class="col-dato">Dato</span>
+      <span class="col-val">Segnale</span>
+      <span class="col-w">Peso</span>
+      <span class="col-c">Contrib</span>
+    </div>
+    <ul class="comp-list">
+      {% for row in component_rows %}
+      <li class="comp-row is-{{ row.status }}">
+        <div class="comp-main">
+          <span class="comp-label">{{ row.label }}</span>
+          <span class="comp-id">{{ row.id }} · base {{ '%.0f'|format(row.base_pp) }}%{% if row.raw_detail %} · {{ row.raw_detail }}{% endif %}</span>
+        </div>
+        <div class="comp-meta">
+          <span class="comp-status {{ row.status }}">{{ row.status_label }}</span>
+          <span class="comp-values">
+            <span class="comp-dato">{% if row.raw_display %}{{ row.raw_display }}{% else %}—{% endif %}</span>
+            <span class="comp-val">{{ row.value_display }}</span>
+            <span class="comp-w">{% if row.weight_pp is not none %}{{ '%.1f'|format(row.weight_pp) }}%{% else %}{{ '%.0f'|format(row.base_pp) }}%{% endif %}</span>
+            <span class="comp-c">{% if row.contrib_display %}{{ row.contrib_display }}{% else %}—{% endif %}</span>
+            <span class="w">{{ row.weight_display }}</span>
+          </span>
+        </div>
+      </li>
+      {% endfor %}
+    </ul>
   </div>
-  <ul class="comp-list">
-    {% for row in component_rows %}
-    <li class="comp-row is-{{ row.status }}">
-      <div class="comp-main">
-        <span class="comp-label">{{ row.label }}</span>
-        <span class="comp-id">{{ row.id }} · base {{ '%.0f'|format(row.base_pp) }}%{% if row.raw_detail %} · {{ row.raw_detail }}{% endif %}</span>
-      </div>
-      <div class="comp-meta">
-        <span class="comp-status {{ row.status }}">{{ row.status_label }}</span>
-        <span class="comp-values">
-          <span class="comp-dato">{% if row.raw_display %}{{ row.raw_display }}{% else %}—{% endif %}</span>
-          <span class="comp-val">{{ row.value_display }}</span>
-          <span class="comp-w">{% if row.weight_pp is not none %}{{ '%.1f'|format(row.weight_pp) }}%{% else %}{{ '%.0f'|format(row.base_pp) }}%{% endif %}</span>
-          <span class="comp-c">{% if row.contrib_display %}{{ row.contrib_display }}{% else %}—{% endif %}</span>
-          <span class="w">{{ row.weight_display }}</span>
-        </span>
-      </div>
-    </li>
-    {% endfor %}
-  </ul>
 </section>
 {% elif score.settled and settled_snapshot_rows %}
 <section class="components" aria-labelledby="snap-heading">
@@ -103,31 +140,6 @@
   <p class="components-intro">Nessuna statistica tiro disponibile nello snapshot — indice settled a 100.</p>
 </section>
 {% endif %}
-
-<section class="xg-panel">
-  {% set xg = score.xg_score if score.xg_score is not none else 0 %}
-  {% set ring_color = 'var(--accent)' if xg >= 60 else ('var(--xg-mid)' if xg >= 40 else 'var(--xg-low)') %}
-  <div
-    class="xg-ring"
-    style="--pct: {{ xg }}; --ring-color: {{ ring_color }};"
-    role="img"
-    aria-label="Indice xG {{ xg }} su 100"
-  >
-    <div class="xg-num{% if score.settled %} settled{% endif %}">{{ score.xg_score }}</div>
-    <p class="xg-label">Indice · {{ band }}</p>
-  </div>
-  <p class="xg-sub">
-    p(Over 0.5 FT) ≈ {{ '%.0f'|format(score.p_over05_ft * 100) }}%
-    {% if score.in_window %} · finestra 28–32′{% endif %}
-    {% if score.settled %} · settled{% endif %}
-    {% if score.skipped %} · skipped: {{ score.skip_reason }}{% endif %}
-  </p>
-  {% if score.notes %}
-  <ul class="notes">
-    {% for n in score.notes %}<li>{{ n }}</li>{% endfor %}
-  </ul>
-  {% endif %}
-</section>
 
 {% if feature_rows %}
 <section class="features">
@@ -157,27 +169,29 @@
   <p class="api-sports-note muted">fixture {{ api_sports_meta.fixture_id }}{% if api_sports_meta.stat_types %} · {{ api_sports_meta.stat_types|length }} tipi{% endif %}{% if api_sports_meta.events_n %} · {{ api_sports_meta.events_n }} eventi{% endif %}</p>
   {% endif %}
   {% if api_sports_rows %}
-  <div class="api-sports-head" aria-hidden="true">
-    <span>Statistica</span>
-    <span class="col-h">Casa</span>
-    <span class="col-a">Trasf.</span>
-    <span class="col-h1">1H C</span>
-    <span class="col-a1">1H T</span>
+  <div class="table-scroll" role="region" aria-label="Tabella stats API-Football" tabindex="0">
+    <div class="api-sports-head" aria-hidden="true">
+      <span>Statistica</span>
+      <span class="col-h">Casa</span>
+      <span class="col-a">Trasf.</span>
+      <span class="col-h1">1H C</span>
+      <span class="col-a1">1H T</span>
+    </div>
+    <ul class="api-sports-list">
+      {% for row in api_sports_rows %}
+      <li class="api-sports-row{% if row.in_index %} is-index{% endif %}">
+        <div class="api-sports-main">
+          <span class="api-sports-label">{{ row.label }}</span>
+          <span class="api-sports-type">{{ row.type }}{% if row.in_index %} · <span class="tag-index">indice</span>{% endif %}</span>
+        </div>
+        <span class="api-sports-h">{{ row.home }}</span>
+        <span class="api-sports-a">{{ row.away }}</span>
+        <span class="api-sports-h1">{{ row.home_1h }}</span>
+        <span class="api-sports-a1">{{ row.away_1h }}</span>
+      </li>
+      {% endfor %}
+    </ul>
   </div>
-  <ul class="api-sports-list">
-    {% for row in api_sports_rows %}
-    <li class="api-sports-row{% if row.in_index %} is-index{% endif %}">
-      <div class="api-sports-main">
-        <span class="api-sports-label">{{ row.label }}</span>
-        <span class="api-sports-type">{{ row.type }}{% if row.in_index %} · <span class="tag-index">indice</span>{% endif %}</span>
-      </div>
-      <span class="api-sports-h">{{ row.home }}</span>
-      <span class="api-sports-a">{{ row.away }}</span>
-      <span class="api-sports-h1">{{ row.home_1h }}</span>
-      <span class="api-sports-a1">{{ row.away_1h }}</span>
-    </li>
-    {% endfor %}
-  </ul>
   {% elif not (api_sports_meta and api_sports_meta.error) %}
   <p class="api-sports-note muted">Nessuna statistica API-Football per questa partita.</p>
   {% endif %}

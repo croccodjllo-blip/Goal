@@ -69,11 +69,13 @@ def test_static_css(monkeypatch) -> None:
     assert ".settled-banner" in resp.text
     assert "prefers-reduced-motion" in resp.text
     assert "IBM Plex Mono" in resp.text or "IBM Plex Sans" in resp.text
-    assert "radial-gradient" not in resp.text
+    assert "Barlow Condensed" in resp.text or "--display" in resp.text
     assert "@keyframes rise-in" not in resp.text
     assert ".api-sports" in resp.text
     assert ".api-sports-row" in resp.text
     assert ".tag-index" in resp.text
+    assert ".brand-mark" in resp.text
+    assert "conic-gradient" in resp.text or ".xg-ring" in resp.text
 
 
 def test_api_sports_stat_rows_for_display() -> None:

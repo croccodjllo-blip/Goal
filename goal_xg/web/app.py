@@ -568,7 +568,7 @@ def _load_api_sports_dump_for_fixture(
 
 
 def create_app() -> FastAPI:
-    app = FastAPI(title="Goal xG", version="0.4.5", docs_url="/docs")
+    app = FastAPI(title="Goal xG", version="0.5.0", docs_url="/docs")
     app.mount("/static", StaticFiles(directory=str(_WEB_DIR / "static")), name="static")
 
     @app.get("/health")
@@ -586,7 +586,7 @@ def create_app() -> FastAPI:
         return {
             "ok": True,
             "service": "goal-xg",
-            "version": "0.4.5",
+            "version": "0.5.0",
             "goal_api_key_configured": goal_key,
             "football_data_configured": fd_key,
             "api_sports_configured": api_sports_key,

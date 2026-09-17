@@ -2,105 +2,74 @@
 {% block title %}Goal xG — Live{% endblock %}
 {% block content %}
 <header class="board-head">
-  <h1>Live Big-5</h1>
-  <p>Focus 0-0 · 28′–32′ → indice · programma di oggi sotto.</p>
+  <div class="board-head-row">
+    <h1>Live Big-5</h1>
+    <span class="board-pulse" aria-hidden="true"><span class="board-pulse-dot"></span> Live board</span>
+  </div>
+  <p>Focus 0-0 · finestra 28′–32′ → indice · programma di oggi sotto.</p>
 </header>
 
 {% if error %}
-<div class="alert">{{ error }}</div>
+<div class="alert" role="alert">{{ error }}</div>
 {% endif %}
 
 {% if focus %}
-<p class="section-label"><span class="window-pill">Focus</span>
-  {% if focus_reason == 'finestra' %}Prossima in finestra 0-0
-  {% elif focus_reason == 'live_00' %}Prossima live 0-0
-  {% elif focus_reason == 'upcoming' %}Prossima in programma
-  {% else %}Attenzione{% endif %}
-</p>
-<div class="league-group">
-  <ul class="match-list">
-    <li class="match-row hot">
-      <a class="match-link" href="/fixtures/{{ focus.fixture_id }}">
-        <span class="minute-badge{% if focus.minute is none %} is-waiting{% endif %}">
-          {% if focus.minute is not none %}{{ focus.minute }}′{% elif focus.kickoff_time %}{{ focus.kickoff_time }}{% elif focus.kickoff_label %}{{ focus.kickoff_label }}{% else %}—{% endif %}
-        </span>
-        <span class="teams">
-          <span class="team-name">{{ focus.home_name }}</span>
-          <span class="team-name">{{ focus.away_name }}</span>
-        </span>
-        <span class="score-col">
-          {% if focus.status == 'scheduled' and focus.score_home is none %}
-          <span>–</span><span>–</span>
-          {% else %}
-          <span>{{ focus.score_home if focus.score_home is not none else "–" }}</span>
-          <span>{{ focus.score_away if focus.score_away is not none else "–" }}</span>
-          {% endif %}
-        </span>
-        <span class="status-col">
-          {% if focus.xg_score is not none %}
-          <span class="xg-badge {{ focus.xg_tone }}" title="Indice prodotto xG">{{ focus.xg_score }}</span>
-          {% elif focus.in_window and focus.is_00 %}
-          <span class="window-pill">28–32′</span>
-          {% elif focus.status == 'scheduled' %}
-          <span class="xg-badge">prog.</span>
-          {% elif focus.is_00 %}
-          <span class="xg-badge">0-0</span>
-          {% else %}
-          <span class="live-pill">Live</span>
-          {% endif %}
-        </span>
-      </a>
-    </li>
-  </ul>
-</div>
+<section class="board-section" aria-labelledby="sec-focus">
+  <p class="section-label" id="sec-focus">
+    <span class="window-pill">Focus</span>
+    {% if focus_reason == 'finestra' %}Prossima in finestra 0-0
+    {% elif focus_reason == 'live_00' %}Prossima live 0-0
+    {% elif focus_reason == 'upcoming' %}Prossima in programma
+    {% else %}Attenzione{% endif %}
+  </p>
+  <div class="league-group league-group--focus">
+    <ul class="match-list">
+      <li class="match-row hot">
+        <a class="match-link" href="/fixtures/{{ focus.fixture_id }}">
+          <span class="minute-badge{% if focus.minute is none %} is-waiting{% endif %}">
+            {% if focus.minute is not none %}{{ focus.minute }}′{% elif focus.kickoff_time %}{{ focus.kickoff_time }}{% elif focus.kickoff_label %}{{ focus.kickoff_label }}{% else %}—{% endif %}
+          </span>
+          <span class="teams">
+            <span class="team-name">{{ focus.home_name }}</span>
+            <span class="team-name">{{ focus.away_name }}</span>
+          </span>
+          <span class="score-col">
+            {% if focus.status == 'scheduled' and focus.score_home is none %}
+            <span>–</span><span>–</span>
+            {% else %}
+            <span>{{ focus.score_home if focus.score_home is not none else "–" }}</span>
+            <span>{{ focus.score_away if focus.score_away is not none else "–" }}</span>
+            {% endif %}
+          </span>
+          <span class="status-col">
+            {% if focus.xg_score is not none %}
+            <span class="xg-badge {{ focus.xg_tone }}" title="Indice prodotto xG">{{ focus.xg_score }}</span>
+            {% elif focus.in_window and focus.is_00 %}
+            <span class="window-pill">28–32′</span>
+            {% elif focus.status == 'scheduled' %}
+            <span class="xg-badge">prog.</span>
+            {% elif focus.is_00 %}
+            <span class="xg-badge">0-0</span>
+            {% else %}
+            <span class="live-pill">Live</span>
+            {% endif %}
+          </span>
+        </a>
+      </li>
+    </ul>
+  </div>
+</section>
 {% endif %}
 
 {% if candidates %}
-<p class="section-label"><span class="window-pill">Finestra</span> Candidati @30′ (0-0)</p>
-<div class="league-group">
-  <ul class="match-list">
-    {% for c in candidates %}
-    <li class="match-row hot">
-      <a class="match-link" href="/fixtures/{{ c.fixture_id }}">
-        <span class="minute-badge">{{ c.minute or "?" }}′</span>
-        <span class="teams">
-          <span class="team-name">{{ c.home_name }}</span>
-          <span class="team-name">{{ c.away_name }}</span>
-        </span>
-        <span class="score-col">
-          <span>{{ c.score_home if c.score_home is not none else "–" }}</span>
-          <span>{{ c.score_away if c.score_away is not none else "–" }}</span>
-        </span>
-        <span class="status-col">
-          {% if c.xg_score is not none %}
-          <span class="xg-badge {{ c.xg_tone }}" title="Indice prodotto xG">{{ c.xg_score }}</span>
-          {% else %}
-          <span class="window-pill">28–32′</span>
-          {% endif %}
-        </span>
-      </a>
-    </li>
-    {% endfor %}
-  </ul>
-</div>
-{% endif %}
-
-<p class="section-label"><span class="live-pill">Live</span> Solo 0-0 Big-5</p>
-
-{% if league_groups %}
-  {% for group in league_groups %}
-  <section class="league-group">
-    <div class="league-header">
-      <span class="league-dot" aria-hidden="true"></span>
-      {{ group.league_name }}
-    </div>
+<section class="board-section" aria-labelledby="sec-window">
+  <p class="section-label" id="sec-window"><span class="window-pill">Finestra</span> Candidati @30′ (0-0)</p>
+  <div class="league-group">
     <ul class="match-list">
-      {% for c in group.matches %}
-      <li class="match-row">
+      {% for c in candidates %}
+      <li class="match-row hot">
         <a class="match-link" href="/fixtures/{{ c.fixture_id }}">
-          <span class="minute-badge{% if c.minute is none %} is-waiting{% endif %}">
-            {% if c.minute is not none %}{{ c.minute }}′{% else %}—{% endif %}
-          </span>
+          <span class="minute-badge">{{ c.minute or "?" }}′</span>
           <span class="teams">
             <span class="team-name">{{ c.home_name }}</span>
             <span class="team-name">{{ c.away_name }}</span>
@@ -112,10 +81,85 @@
           <span class="status-col">
             {% if c.xg_score is not none %}
             <span class="xg-badge {{ c.xg_tone }}" title="Indice prodotto xG">{{ c.xg_score }}</span>
-            {% elif c.in_window %}
-            <span class="window-pill">28–32′</span>
             {% else %}
-            <span class="xg-badge">0-0</span>
+            <span class="window-pill">28–32′</span>
+            {% endif %}
+          </span>
+        </a>
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+</section>
+{% endif %}
+
+<section class="board-section" aria-labelledby="sec-live00">
+  <p class="section-label" id="sec-live00"><span class="live-pill">Live</span> Solo 0-0 Big-5</p>
+
+  {% if league_groups %}
+    {% for group in league_groups %}
+    <section class="league-group">
+      <div class="league-header">
+        <span class="league-dot" aria-hidden="true"></span>
+        {{ group.league_name }}
+      </div>
+      <ul class="match-list">
+        {% for c in group.matches %}
+        <li class="match-row">
+          <a class="match-link" href="/fixtures/{{ c.fixture_id }}">
+            <span class="minute-badge{% if c.minute is none %} is-waiting{% endif %}">
+              {% if c.minute is not none %}{{ c.minute }}′{% else %}—{% endif %}
+            </span>
+            <span class="teams">
+              <span class="team-name">{{ c.home_name }}</span>
+              <span class="team-name">{{ c.away_name }}</span>
+            </span>
+            <span class="score-col">
+              <span>{{ c.score_home if c.score_home is not none else "–" }}</span>
+              <span>{{ c.score_away if c.score_away is not none else "–" }}</span>
+            </span>
+            <span class="status-col">
+              {% if c.xg_score is not none %}
+              <span class="xg-badge {{ c.xg_tone }}" title="Indice prodotto xG">{{ c.xg_score }}</span>
+              {% elif c.in_window %}
+              <span class="window-pill">28–32′</span>
+              {% else %}
+              <span class="xg-badge">0-0</span>
+              {% endif %}
+            </span>
+          </a>
+        </li>
+        {% endfor %}
+      </ul>
+    </section>
+    {% endfor %}
+  {% else %}
+  <p class="empty">Nessun 0-0 live Big-5 — vedi partite in programma oggi.</p>
+  {% endif %}
+</section>
+
+<section class="board-section" aria-labelledby="sec-sched">
+  <p class="section-label" id="sec-sched"><span class="sched-pill">Oggi</span> Partite in programma oggi</p>
+
+  {% if scheduled %}
+  <section class="league-group">
+    <ul class="match-list">
+      {% for c in scheduled %}
+      <li class="match-row">
+        <a class="match-link match-link--sched" href="/fixtures/{{ c.fixture_id }}">
+          <span class="minute-badge is-waiting kickoff-badge" title="Kickoff">{{ c.kickoff_time or c.kickoff_label or "—" }}</span>
+          <span class="teams">
+            <span class="team-name">{{ c.home_name }}</span>
+            <span class="team-name">{{ c.away_name }}</span>
+          </span>
+          <span class="league-col">{{ c.league_name }}</span>
+          <span class="status-col">
+            {% if c.status == 'live' %}
+            <span class="live-pill">Live</span>
+            {% elif c.status == 'finished' %}
+            <span class="xg-badge">FT</span>
+            {% else %}
+            <span class="xg-badge">prog.</span>
             {% endif %}
           </span>
         </a>
@@ -123,40 +167,8 @@
       {% endfor %}
     </ul>
   </section>
-  {% endfor %}
-{% else %}
-<p class="empty">Nessun 0-0 live Big-5 — vedi partite in programma oggi.</p>
-{% endif %}
-
-<p class="section-label"><span class="sched-pill">Oggi</span> Partite in programma oggi</p>
-
-{% if scheduled %}
-<section class="league-group">
-  <ul class="match-list">
-    {% for c in scheduled %}
-    <li class="match-row">
-      <a class="match-link match-link--sched" href="/fixtures/{{ c.fixture_id }}">
-        <span class="minute-badge is-waiting kickoff-badge" title="Kickoff">{{ c.kickoff_time or c.kickoff_label or "—" }}</span>
-        <span class="teams">
-          <span class="team-name">{{ c.home_name }}</span>
-          <span class="team-name">{{ c.away_name }}</span>
-        </span>
-        <span class="league-col">{{ c.league_name }}</span>
-        <span class="status-col">
-          {% if c.status == 'live' %}
-          <span class="live-pill">Live</span>
-          {% elif c.status == 'finished' %}
-          <span class="xg-badge">FT</span>
-          {% else %}
-          <span class="xg-badge">prog.</span>
-          {% endif %}
-        </span>
-      </a>
-    </li>
-    {% endfor %}
-  </ul>
+  {% else %}
+  <p class="empty">Nessuna partita Big-5 in programma oggi.</p>
+  {% endif %}
 </section>
-{% else %}
-<p class="empty">Nessuna partita Big-5 in programma oggi.</p>
-{% endif %}
 {% endblock %}

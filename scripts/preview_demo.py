@@ -262,6 +262,25 @@ def create_preview_app() -> FastAPI:
     @app.get("/", response_class=HTMLResponse)
     def index(request: Request) -> HTMLResponse:
         live_cards, candidates, league_groups = _demo_board()
+        focus = candidates[0] if candidates else (live_cards[0] if live_cards else None)
+        scheduled = [
+            {
+                "fixture_id": "demo-napoli-lazio",
+                "home_name": "Napoli",
+                "away_name": "Lazio",
+                "league_name": "Serie A",
+                "kickoff_time": "20:45",
+                "status": "scheduled",
+            },
+            {
+                "fixture_id": "demo-tottenham-newcastle",
+                "home_name": "Tottenham",
+                "away_name": "Newcastle",
+                "league_name": "Premier League",
+                "kickoff_time": "18:30",
+                "status": "scheduled",
+            },
+        ]
         return _TEMPLATES.TemplateResponse(
             request,
             "index.html",
@@ -270,6 +289,9 @@ def create_preview_app() -> FastAPI:
                 "live_cards": live_cards,
                 "league_groups": league_groups,
                 "candidates": candidates,
+                "focus": focus,
+                "focus_reason": "finestra" if focus and focus.get("in_window") else "live_00",
+                "scheduled": scheduled,
                 # No auto-refresh on preview (stable screenshots).
                 "refresh_seconds": None,
             },
@@ -288,6 +310,35 @@ def create_preview_app() -> FastAPI:
                 card["fixture_id"] = fixture_id
         score_dict = _demo_score(card) if card else None
         xg = score_dict.get("xg_score") if score_dict else None
+        api_sports_rows = [
+            {
+                "type": "Total Shots",
+                "label": "Tiri totali",
+                "home": "10",
+                "away": "4",
+                "home_1h": "8",
+                "away_1h": "2",
+                "in_index": True,
+            },
+            {
+                "type": "Ball Possession",
+                "label": "Possesso palla",
+                "home": "61%",
+                "away": "39%",
+                "home_1h": "58%",
+                "away_1h": "42%",
+                "in_index": False,
+            },
+            {
+                "type": "Shots on Goal",
+                "label": "Tiri in porta",
+                "home": "5",
+                "away": "2",
+                "home_1h": "4",
+                "away_1h": "1",
+                "in_index": True,
+            },
+        ]
         return _TEMPLATES.TemplateResponse(
             request,
             "fixture.html",
@@ -300,6 +351,21 @@ def create_preview_app() -> FastAPI:
                 "feature_rows": _feature_rows(score_dict),
                 "component_rows": _component_rows(score_dict),
                 "settled_snapshot_rows": [],
+                "api_sports_rows": api_sports_rows,
+                "api_sports_events": [
+                    {
+                        "minute": 12,
+                        "type": "Yellow Card",
+                        "detail": "Roughing",
+                        "team": "Milan",
+                        "player": "Demo",
+                    }
+                ],
+                "api_sports_meta": {
+                    "fixture_id": 999001,
+                    "stat_types": ["Total Shots", "Ball Possession", "Shots on Goal"],
+                    "events_n": 1,
+                },
             },
         )
 
