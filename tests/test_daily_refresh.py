@@ -154,7 +154,7 @@ def test_run_daily_refresh_persists_and_quota_bounded(tmp_path: Path, monkeypatc
             params = dict(request.url.params)
             status = params.get("status")
             lid = params.get("leagueId") or params.get("league")
-            if status == "FT":
+            if status in ("FT", "FINISHED"):
                 tid_h = f"h-{lid}"
                 tid_a = f"a-{lid}"
                 return httpx.Response(
@@ -192,28 +192,33 @@ def test_run_daily_refresh_persists_and_quota_bounded(tmp_path: Path, monkeypatc
                     ]
                 },
             )
-        if path.endswith("/standings"):
-            params = dict(request.url.params)
-            lid = params.get("leagueId") or params.get("league")
+        if "/standings/" in path:
+            lid = path.rstrip("/").split("/")[-1]
             return httpx.Response(
                 200,
                 json={
                     "data": [
                         {
                             "team": {"id": f"h-{lid}", "name": "Home FC"},
-                            "rank": 1,
-                            "played": 5,
-                            "points": 12,
+                            "overallLeaguePosition": "1",
+                            "overallLeaguePlayed": "5",
+                            "overallLeaguePTS": "12",
+                            "overallLeagueGF": "10",
+                            "overallLeagueGA": "3",
                         },
                         {
                             "team": {"id": f"a-{lid}", "name": "Away FC"},
-                            "rank": 8,
-                            "played": 5,
-                            "points": 6,
+                            "overallLeaguePosition": "8",
+                            "overallLeaguePlayed": "5",
+                            "overallLeaguePTS": "6",
+                            "overallLeagueGF": "4",
+                            "overallLeagueGA": "7",
                         },
                     ]
                 },
             )
+        if path.endswith("/standings"):
+            return httpx.Response(404, json={"error": "use /standings/{id}"})
         return httpx.Response(404, json={"error": path})
 
     transport = httpx.MockTransport(handler)
@@ -262,9 +267,10 @@ def test_run_daily_refresh_persists_and_quota_bounded(tmp_path: Path, monkeypatc
     assert store.load_history_rows("PL")
     assert store.load_standings_payload("SA") is not None
 
-    # REST budget: leagues may be cache-hit (0) + 5 today + 5 tomorrow + 5 hist + 5 standings
-    fixture_calls = sum(1 for c in calls if c.endswith("/fixtures"))
-    standings_calls = sum(1 for c in calls if c.endswith("/standings"))
+    fixture_calls = sum(1 for c in calls if c.endswith("/fixtures") or "/fixtures?" in c)
+    # MockTransport records path without query — fixtures path ends with /fixtures
+    fixture_calls = sum(1 for c in calls if c.rstrip("/").endswith("fixtures"))
+    standings_calls = sum(1 for c in calls if "/standings/" in c)
     assert fixture_calls == 15  # 5+5+5
     assert standings_calls == 5
     assert fixture_calls + standings_calls <= 25

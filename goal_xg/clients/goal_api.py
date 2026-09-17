@@ -386,15 +386,20 @@ class GoalApiClient:
         league_id: int | str,
         *,
         season: int | None = None,
-        status: str | None = "FT",
+        status: str | None = "FINISHED",
         limit: int | None = None,
     ) -> Any:
         # Prefer ``leagueId`` — provider ignores bare ``league`` for SCHEDULED lists.
+        # Status enum is provider-native: FINISHED (not FT), SCHEDULED, LIVE, …
         params: dict[str, Any] = {"league": league_id, "leagueId": league_id}
         if season is not None:
             params["season"] = season
         if status is not None:
-            params["status"] = status
+            # Accept legacy alias FT → FINISHED (GOAL validation enum).
+            status_norm = str(status).strip().upper()
+            if status_norm in {"FT", "FULL_TIME", "FULLTIME"}:
+                status_norm = "FINISHED"
+            params["status"] = status_norm
         if limit is not None:
             params["limit"] = limit
         return self.get("/fixtures", **params)
@@ -439,11 +444,16 @@ class GoalApiClient:
         *,
         season: int | None = None,
     ) -> Any:
-        """``GET /standings`` — table for incentive / rank-gap signals."""
-        params: dict[str, Any] = {"league": league_id, "leagueId": league_id}
-        if season is not None:
-            params["season"] = season
-        return self.get("/standings", **params)
+        """``GET /standings/{leagueId}`` — table for incentive / rank-gap signals.
+
+        Also accepts ``/leagues/{id}/standings``. Query ``?league=&leagueId=``
+        alone is **not** routed (404) on current GOAL gateway.
+        """
+        # Path form is the live contract (2026-09 probe).
+        try:
+            return self.get(f"/standings/{league_id}")
+        except GoalApiError:
+            return self.get(f"/leagues/{league_id}/standings")
 
     def h2h(
         self,

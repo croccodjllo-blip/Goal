@@ -213,7 +213,7 @@ def score_prematch_cmd(
 
             finished_raw: list[Any] = []
             if league_id is not None:
-                hist = client.fixtures_by_league(league_id, season=season, status="FT")
+                hist = client.fixtures_by_league(league_id, season=season, status="FINISHED")
                 finished_raw = _normalize_fixtures_list(hist)
 
             standings_payload: Any = None

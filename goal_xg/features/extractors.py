@@ -451,8 +451,19 @@ def _team_rank(row: Mapping[str, Any]) -> tuple[str | None, int | None, int | No
         or team.get("id")
         or row.get("id")
     )
-    rank = row.get("rank") or row.get("position") or row.get("overall_league_position")
-    played = row.get("played") or row.get("playedGames") or row.get("matches") or row.get("overall_league_pay")
+    rank = (
+        row.get("rank")
+        or row.get("position")
+        or row.get("overall_league_position")
+        or row.get("overallLeaguePosition")
+    )
+    played = (
+        row.get("played")
+        or row.get("playedGames")
+        or row.get("matches")
+        or row.get("overall_league_pay")
+        or row.get("overallLeaguePlayed")
+    )
     try:
         rank_i = int(rank) if rank is not None else None
     except (TypeError, ValueError):

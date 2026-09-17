@@ -107,8 +107,18 @@ def _team_id_from_row(row: dict[str, Any], *, side: str) -> str | None:
 def _standing_extras(row: dict[str, Any]) -> dict[str, Any]:
     """Best-effort points / GF / GA from a standings row (provider shapes vary)."""
     team = row.get("team") if isinstance(row.get("team"), dict) else {}
-    name = team.get("name") or row.get("team_name") or row.get("name")
-    pts = row.get("points") or row.get("pts") or row.get("overall_league_PTS")
+    name = (
+        team.get("name")
+        or row.get("team_name")
+        or row.get("teamName")
+        or row.get("name")
+    )
+    pts = (
+        row.get("points")
+        or row.get("pts")
+        or row.get("overall_league_PTS")
+        or row.get("overallLeaguePTS")
+    )
     all_block = row.get("all") if isinstance(row.get("all"), dict) else {}
     if pts is None:
         pts = all_block.get("points")
@@ -117,12 +127,14 @@ def _standing_extras(row: dict[str, Any]) -> dict[str, Any]:
         or row.get("goals_for")
         or row.get("gf")
         or row.get("overall_league_GF")
+        or row.get("overallLeagueGF")
     )
     goals_against = (
         row.get("goalsAgainst")
         or row.get("goals_against")
         or row.get("ga")
         or row.get("overall_league_GA")
+        or row.get("overallLeagueGA")
     )
     goals = all_block.get("goals") if isinstance(all_block.get("goals"), dict) else {}
     if goals_for is None:
@@ -376,7 +388,7 @@ def run_daily_refresh(
         use_season = season if season is not None else lg.season
         try:
             hist_payload = client.fixtures_by_league(
-                lg.league_id, season=use_season, status="FT"
+                lg.league_id, season=use_season, status="FINISHED"
             )
             hist_rows = unwrap_fixture_rows(hist_payload)
         except GoalApiError as exc:

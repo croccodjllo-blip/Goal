@@ -480,7 +480,7 @@ def score_fixture_live30(
         hist_rows = _cached_history_for_league(league_id)
         if not hist_rows:
             try:
-                hist = client.fixtures_by_league(league_id, season=season, status="FT")
+                hist = client.fixtures_by_league(league_id, season=season, status="FINISHED")
                 hist_rows = _unwrap_list(hist)
             except Exception:
                 hist_rows = []
