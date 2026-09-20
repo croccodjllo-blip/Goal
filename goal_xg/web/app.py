@@ -303,6 +303,143 @@ def _group_by_league(
     return [{"league_name": name, "matches": buckets[name]} for name in order]
 
 
+def _status_rank(status: str | None) -> int:
+    s = str(status or "").lower()
+    if s == "live":
+        return 0
+    if s == "scheduled":
+        return 1
+    return 2
+
+
+def build_day_list(
+    scheduled: list[dict[str, Any]],
+    *,
+    live_cards: list[dict[str, Any]] | None = None,
+    candidates: list[dict[str, Any]] | None = None,
+    focus: Mapping[str, Any] | None = None,
+) -> list[dict[str, Any]]:
+    """Merge today's programme with live overlays into one scannable day list.
+
+    Preserves every scheduled Big-5 row; live clocks/scores/xG overlay by
+    ``fixture_id``. Window candidates and focus are flagged for compact filters.
+    """
+    live_by_id = {
+        str(c.get("fixture_id") or ""): c
+        for c in (live_cards or [])
+        if c.get("fixture_id") is not None and str(c.get("fixture_id") or "")
+    }
+    cand_ids = {
+        str(c.get("fixture_id") or "")
+        for c in (candidates or [])
+        if c.get("fixture_id") is not None and str(c.get("fixture_id") or "")
+    }
+    focus_id = str(focus.get("fixture_id") or "") if focus else ""
+
+    out: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for base in scheduled:
+        card = dict(base)
+        fid = str(card.get("fixture_id") or "")
+        live = live_by_id.get(fid) if fid else None
+        if live:
+            for key in (
+                "minute",
+                "period",
+                "score_home",
+                "score_away",
+                "is_00",
+                "in_window",
+                "is_live30_candidate",
+                "xg_score",
+                "xg_tone",
+                "home_name",
+                "away_name",
+                "league_name",
+            ):
+                if live.get(key) is not None:
+                    card[key] = live[key]
+            if live.get("minute") is not None:
+                card["status"] = "live"
+                card["status_label"] = "Live"
+        if fid and fid in cand_ids:
+            card["in_window"] = True
+            card["is_live30_candidate"] = True
+            cand = next(
+                (c for c in (candidates or []) if str(c.get("fixture_id") or "") == fid),
+                None,
+            )
+            if cand and cand.get("xg_score") is not None:
+                card["xg_score"] = cand["xg_score"]
+                card["xg_tone"] = cand.get("xg_tone") or _xg_tone(cand["xg_score"])
+        card["is_focus"] = bool(fid and fid == focus_id)
+        card["filter_tags"] = _day_filter_tags(card)
+        out.append(_attach_board_xg(card) if card.get("xg_score") is None else card)
+        if fid:
+            seen.add(fid)
+
+    for fid, live in live_by_id.items():
+        if fid in seen:
+            continue
+        card = dict(live)
+        card.setdefault("status", "live")
+        card.setdefault("kickoff_time", None)
+        card["is_focus"] = bool(fid and fid == focus_id)
+        if fid in cand_ids:
+            card["in_window"] = True
+            card["is_live30_candidate"] = True
+        card["filter_tags"] = _day_filter_tags(card)
+        out.append(card)
+
+    out.sort(
+        key=lambda c: (
+            _status_rank(str(c.get("status") or "")),
+            str(c.get("kickoff_utc") or "9999"),
+            str(c.get("kickoff_time") or c.get("kickoff_label") or ""),
+            str(c.get("league_name") or ""),
+            str(c.get("home_name") or ""),
+        )
+    )
+    return out
+
+
+def _day_filter_tags(card: Mapping[str, Any]) -> str:
+    """Space-separated filter tokens for compact day-list chips."""
+    tags = ["all"]
+    status = str(card.get("status") or "").lower()
+    if status == "live":
+        tags.append("live")
+    if card.get("is_00"):
+        tags.append("00")
+    if card.get("in_window") and card.get("is_00"):
+        tags.append("win")
+    if card.get("is_focus"):
+        tags.append("focus")
+    if status == "scheduled":
+        tags.append("oggi")
+    return " ".join(tags)
+
+
+def group_day_list_by_league(cards: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """League blocks for the day list; matches keep day-list sort within league."""
+    order: list[str] = []
+    buckets: dict[str, list[dict[str, Any]]] = {}
+    for card in cards:
+        name = str(card.get("league_name") or "").strip() or "Big-5"
+        if name not in buckets:
+            buckets[name] = []
+            order.append(name)
+        buckets[name].append(card)
+    # Prefer live-heavy leagues first (any live row), then name.
+    def _league_key(name: str) -> tuple[int, str]:
+        matches = buckets[name]
+        has_live = any(str(m.get("status") or "") == "live" for m in matches)
+        return (0 if has_live else 1, name.lower())
+
+    order.sort(key=_league_key)
+    return [{"league_name": name, "matches": buckets[name]} for name in order]
+
+
 def _format_raw_value(raw: Any) -> str | None:
     if raw is None or raw == "":
         return None
@@ -623,6 +760,7 @@ def create_app() -> FastAPI:
         client = _client_or_none()
         error: str | None = None
         live_cards: list[dict[str, Any]] = []
+        all_live_cards: list[dict[str, Any]] = []
         candidates: list[dict[str, Any]] = []
         scheduled: list[dict[str, Any]] = []
         focus: dict[str, Any] | None = None
@@ -633,9 +771,8 @@ def create_app() -> FastAPI:
                 # One /fixtures/live fetch shared by board + live30 candidates (quota).
                 raw_live = _unwrap_live_rows(client)
                 rows = _big5_filter(client, raw_live)
-                live_cards = _sort_live_watch(
-                    _filter_live_00([_row_card(r) for r in rows])
-                )
+                all_live_cards = [_row_card(r) for r in rows]
+                live_cards = _sort_live_watch(_filter_live_00(list(all_live_cards)))
                 candidates = [
                     _attach_board_xg(dict(c))
                     for c in list_live30_candidates(
@@ -662,6 +799,13 @@ def create_app() -> FastAPI:
             for c in candidates
             if c.get("fixture_id") is not None and str(c.get("fixture_id") or "")
         }
+        day_cards = build_day_list(
+            scheduled,
+            live_cards=all_live_cards,
+            candidates=candidates,
+            focus=focus,
+        )
+        day_groups = group_day_list_by_league(day_cards)
         return _TEMPLATES.TemplateResponse(
             request,
             "index.html",
@@ -671,6 +815,9 @@ def create_app() -> FastAPI:
                 "league_groups": _group_by_league(
                     live_cards, exclude_fixture_ids=candidate_ids
                 ),
+                "day_cards": day_cards,
+                "day_groups": day_groups,
+                "day_count": len(day_cards),
                 "candidates": candidates,
                 "scheduled": scheduled,
                 "focus": focus,

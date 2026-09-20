@@ -7,6 +7,7 @@ from goal_xg.live30.board import (
     filter_watch_00,
     select_watch_focus,
 )
+from goal_xg.web.app import build_day_list, group_day_list_by_league
 
 
 def test_classify_match_status() -> None:
@@ -81,3 +82,61 @@ def test_select_watch_focus_prefers_finestra_then_upcoming() -> None:
         schedule_cards=schedule,
     )
     assert focus3 is not None and focus3["fixture_id"] == "next"
+
+
+def test_build_day_list_merges_live_and_keeps_all() -> None:
+    scheduled = [
+        {
+            "fixture_id": "a",
+            "home_name": "Home A",
+            "away_name": "Away A",
+            "league_name": "Serie A",
+            "kickoff_time": "15:00",
+            "kickoff_utc": "2099-01-01T14:00:00+00:00",
+            "status": "scheduled",
+            "is_00": True,
+        },
+        {
+            "fixture_id": "b",
+            "home_name": "Home B",
+            "away_name": "Away B",
+            "league_name": "La Liga",
+            "kickoff_time": "18:00",
+            "kickoff_utc": "2099-01-01T17:00:00+00:00",
+            "status": "scheduled",
+            "is_00": True,
+        },
+    ]
+    live = [
+        {
+            "fixture_id": "a",
+            "home_name": "Home A",
+            "away_name": "Away A",
+            "league_name": "Serie A",
+            "minute": 30,
+            "score_home": 0,
+            "score_away": 0,
+            "is_00": True,
+            "in_window": True,
+            "xg_score": 62,
+            "xg_tone": "high",
+        }
+    ]
+    day = build_day_list(
+        scheduled,
+        live_cards=live,
+        candidates=live,
+        focus=live[0],
+    )
+    assert len(day) == 2
+    by_id = {c["fixture_id"]: c for c in day}
+    assert by_id["a"]["status"] == "live"
+    assert by_id["a"]["minute"] == 30
+    assert by_id["a"]["is_focus"] is True
+    assert "win" in by_id["a"]["filter_tags"]
+    assert by_id["b"]["status"] == "scheduled"
+    assert "oggi" in by_id["b"]["filter_tags"]
+    groups = group_day_list_by_league(day)
+    assert {g["league_name"] for g in groups} == {"Serie A", "La Liga"}
+    # Live league sorts first.
+    assert groups[0]["league_name"] == "Serie A"

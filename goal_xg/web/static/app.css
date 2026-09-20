@@ -31,9 +31,9 @@
   --display: "Barlow Condensed", "IBM Plex Sans", system-ui, sans-serif;
   --mono: "IBM Plex Mono", "SF Mono", "Consolas", ui-monospace, monospace;
   --top-h: 52px;
-  --max: 780px;
-  --radius: 6px;
-  --pad-x: 0.9rem;
+  --max: 860px;
+  --radius: 4px;
+  --pad-x: 0.75rem;
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
@@ -233,16 +233,19 @@ button:focus-visible,
   margin: 0 auto;
 }
 
-/* —— Board head —— */
+/* —— Board head (compact daily list) —— */
 .board-head {
-  padding: 0.95rem var(--pad-x) 0.45rem;
-  scroll-margin-top: calc(var(--top-h) + 0.35rem);
+  padding: 0.55rem var(--pad-x) 0.25rem;
+  scroll-margin-top: calc(var(--top-h) + 0.25rem);
+}
+.board-head--compact h1 {
+  font-size: clamp(1.25rem, 4vw, 1.55rem);
 }
 .board-head-row {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 0.75rem;
+  gap: 0.5rem;
   flex-wrap: wrap;
   min-width: 0;
 }
@@ -250,32 +253,49 @@ button:focus-visible,
   margin: 0;
   min-width: 0;
   font-family: var(--display);
-  font-size: clamp(1.6rem, 5vw, 2rem);
+  font-size: clamp(1.35rem, 4.5vw, 1.7rem);
   font-weight: 800;
   letter-spacing: 0.03em;
   text-transform: uppercase;
   line-height: 1.05;
 }
 .board-head p {
-  margin: 0.35rem 0 0;
+  margin: 0.2rem 0 0;
   color: var(--muted);
-  font-size: 0.82rem;
-  max-width: 38rem;
+  font-size: 0.72rem;
+  max-width: 40rem;
+  line-height: 1.35;
+}
+.board-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+.board-count {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--best);
+  padding: 0.12rem 0.4rem;
+  border: 1px solid color-mix(in srgb, var(--best) 35%, var(--line));
+  border-radius: 3px;
+  background: var(--best-dim);
 }
 .board-pulse {
   display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: 0.35rem;
   font-family: var(--mono);
-  font-size: 0.65rem;
+  font-size: 0.6rem;
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--live);
 }
 .board-pulse-dot {
-  width: 0.45rem;
-  height: 0.45rem;
+  width: 0.4rem;
+  height: 0.4rem;
   border-radius: 50%;
   background: var(--live);
   box-shadow: 0 0 0 0 rgba(26, 227, 106, 0.55);
@@ -288,15 +308,238 @@ button:focus-visible,
   100% { box-shadow: 0 0 0 0 rgba(26, 227, 106, 0); }
 }
 
-.board-section { margin: 0 0 0.35rem; }
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
 
+/* —— Day filters —— */
+.day-filters {
+  display: flex;
+  align-items: center;
+  gap: 0.28rem;
+  flex-wrap: wrap;
+  padding: 0.35rem var(--pad-x) 0.45rem;
+  position: sticky;
+  top: var(--top-h);
+  z-index: 30;
+  background: color-mix(in srgb, var(--bg) 92%, transparent);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--line-soft);
+}
+.day-filter {
+  appearance: none;
+  margin: 0;
+  padding: 0.28rem 0.55rem;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: var(--surface);
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  cursor: pointer;
+  line-height: 1.2;
+}
+.day-filter:hover {
+  color: var(--text);
+  border-color: var(--line);
+  background: var(--surface-2);
+}
+.day-filter.is-active {
+  color: var(--best-ink);
+  background: var(--best);
+  border-color: color-mix(in srgb, var(--best) 70%, #fff);
+}
+.day-filter--link {
+  margin-left: auto;
+  text-decoration: none;
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--line));
+  background: var(--accent-dim);
+}
+.day-filter--link:hover {
+  color: var(--text);
+  background: var(--surface-2);
+}
+
+/* —— Compact coupon day list —— */
+.day-list {
+  padding: 0.15rem 0 0.5rem;
+}
+.league-block {
+  margin: 0;
+}
+.league-rail {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.35rem var(--pad-x) 0.2rem;
+  font-family: var(--mono);
+  font-size: 0.62rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  border-bottom: 1px solid var(--line-soft);
+  background: color-mix(in srgb, var(--surface) 55%, transparent);
+}
+.league-n {
+  margin-left: auto;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.league-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--live);
+  flex-shrink: 0;
+}
+
+.coupon-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.coupon-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: stretch;
+  border-bottom: 1px solid var(--line-soft);
+  min-height: 2.15rem;
+}
+.coupon-row.is-window {
+  background: linear-gradient(90deg, var(--window-dim), transparent 55%);
+  box-shadow: inset 2px 0 0 var(--window);
+}
+.coupon-row.is-focus:not(.is-window) {
+  box-shadow: inset 2px 0 0 var(--best);
+}
+.coupon-link {
+  display: grid;
+  grid-template-columns: 2.65rem minmax(0, 1fr) 2.4rem 2.4rem;
+  align-items: center;
+  gap: 0.35rem 0.45rem;
+  min-width: 0;
+  padding: 0.28rem 0.35rem 0.28rem var(--pad-x);
+  color: inherit;
+  text-decoration: none;
+}
+.coupon-link:hover,
+.coupon-link:focus-visible {
+  background: var(--surface-2);
+  color: inherit;
+}
+.coupon-time {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+.coupon-time.is-live { color: var(--live); }
+.coupon-time.is-kick { color: var(--waiting); }
+.coupon-time.is-ft { color: var(--muted); }
+
+.coupon-teams {
+  display: flex;
+  align-items: baseline;
+  gap: 0.28rem;
+  min-width: 0;
+  overflow: hidden;
+}
+.coupon-home,
+.coupon-away {
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.coupon-sep {
+  flex-shrink: 0;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+.coupon-score {
+  display: inline-flex;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: 0.05rem;
+  font-family: var(--display);
+  font-size: 0.95rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  line-height: 1;
+}
+.score-colon { color: var(--muted); font-weight: 600; }
+.score-dash {
+  font-family: var(--mono);
+  font-size: 0.62rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+.coupon-signal {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  min-width: 0;
+}
+.coupon-odds {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 0.55rem;
+  border-left: 1px solid var(--line-soft);
+  font-family: var(--mono);
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--best);
+  text-decoration: none;
+  background: color-mix(in srgb, var(--best-dim) 50%, transparent);
+}
+.coupon-odds:hover {
+  color: var(--best-ink);
+  background: var(--best);
+}
+
+.day-empty-filter {
+  margin: 0.75rem var(--pad-x);
+  padding: 0.85rem;
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.8rem;
+  border: 1px dashed var(--line);
+  border-radius: var(--radius);
+}
+
+/* Legacy board selectors (fixture deep-links / tests still reference) */
+.board-section { margin: 0 0 0.35rem; }
 .section-label {
   display: flex;
   align-items: center;
   gap: 0.5rem;
   flex-wrap: wrap;
   margin: 0;
-  padding: 0.85rem var(--pad-x) 0.4rem;
+  padding: 0.55rem var(--pad-x) 0.3rem;
   font-family: var(--mono);
   font-size: 0.66rem;
   font-weight: 600;
@@ -304,10 +547,8 @@ button:focus-visible,
   letter-spacing: 0.08em;
   color: var(--muted);
 }
-
-/* —— League / match list —— */
 .league-group {
-  margin: 0.2rem var(--pad-x) 0.7rem;
+  margin: 0.15rem var(--pad-x) 0.45rem;
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--surface);
@@ -317,117 +558,93 @@ button:focus-visible,
   border-color: color-mix(in srgb, var(--window) 50%, var(--line));
   box-shadow: inset 3px 0 0 var(--window);
 }
-
 .league-header {
   display: flex;
   align-items: center;
   gap: 0.45rem;
-  padding: 0.42rem 0.85rem;
+  padding: 0.32rem 0.7rem;
   background: var(--surface-2);
   border-bottom: 1px solid var(--line-soft);
   font-family: var(--mono);
-  font-size: 0.68rem;
+  font-size: 0.64rem;
   font-weight: 600;
   color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.06em;
 }
-
-.league-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--live);
-  flex-shrink: 0;
-}
-
-.match-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
+.match-list { list-style: none; margin: 0; padding: 0; }
 .match-row { border-bottom: 1px solid var(--line-soft); }
 .match-row:last-child { border-bottom: none; }
 .match-row.hot {
   background: linear-gradient(90deg, var(--window-dim), transparent 70%);
 }
 .match-row.hot .minute-badge { color: var(--window); }
-
 .match-link {
   display: grid;
   grid-template-columns: 2.75rem minmax(0, 1fr) 1.7rem 2.55rem;
   align-items: center;
-  gap: 0.45rem 0.55rem;
-  min-height: 3.05rem;
-  padding: 0.6rem 0.85rem;
+  gap: 0.35rem 0.45rem;
+  min-height: 2.35rem;
+  padding: 0.35rem 0.7rem;
   color: inherit;
   text-decoration: none;
   transition: background 0.15s var(--ease);
 }
-.match-link:hover {
-  background: var(--surface-2);
-  color: inherit;
-}
+.match-link:hover,
 .match-link:focus-visible {
   background: var(--surface-2);
   color: inherit;
 }
 .match-link:active { background: var(--surface-3); }
-
 .minute-badge {
   font-family: var(--mono);
-  font-size: 0.8rem;
+  font-size: 0.75rem;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   color: var(--live);
 }
 .minute-badge.is-waiting { color: var(--waiting); }
-
 .teams {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.12rem;
+  gap: 0.08rem;
 }
 .team-name {
-  font-size: 0.9rem;
+  font-size: 0.82rem;
   font-weight: 600;
   letter-spacing: -0.01em;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-
 .score-col {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 0.12rem;
+  gap: 0.08rem;
   font-family: var(--display);
   font-variant-numeric: tabular-nums;
   font-weight: 700;
-  font-size: 1.1rem;
+  font-size: 1rem;
   letter-spacing: 0.02em;
-  line-height: 1.15;
+  line-height: 1.1;
 }
-
 .status-col {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 0.15rem;
+  gap: 0.1rem;
   min-width: 0;
 }
-
 .live-pill,
 .window-pill,
 .sched-pill {
   display: inline-flex;
   align-items: center;
-  gap: 0.28rem;
+  gap: 0.22rem;
   font-family: var(--mono);
-  font-size: 0.58rem;
+  font-size: 0.55rem;
   font-weight: 700;
   letter-spacing: 0.05em;
   text-transform: uppercase;
@@ -435,8 +652,8 @@ button:focus-visible,
 }
 .live-pill::before {
   content: "";
-  width: 0.35rem;
-  height: 0.35rem;
+  width: 0.3rem;
+  height: 0.3rem;
   border-radius: 50%;
   background: currentColor;
   box-shadow: 0 0 0 0 rgba(26, 227, 106, 0.45);
@@ -446,28 +663,26 @@ button:focus-visible,
 .window-pill::before { content: none; }
 .sched-pill { color: var(--accent); }
 .sched-pill::before { content: none; }
-
 .match-link--sched {
-  grid-template-columns: 3.3rem minmax(0, 1fr) minmax(3.2rem, 6.5rem) 2.7rem;
+  grid-template-columns: 3.1rem minmax(0, 1fr) minmax(3rem, 6rem) 2.5rem;
 }
 .kickoff-badge {
-  font-size: 0.7rem;
+  font-size: 0.68rem;
   letter-spacing: 0;
   white-space: nowrap;
 }
 .league-col {
   font-family: var(--mono);
-  font-size: 0.62rem;
+  font-size: 0.58rem;
   color: var(--muted);
   text-align: right;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-
 .xg-badge {
   font-family: var(--mono);
-  font-size: 0.92rem;
+  font-size: 0.78rem;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   color: var(--text-secondary);
@@ -476,6 +691,16 @@ button:focus-visible,
 .xg-badge.high { color: var(--xg-high); }
 .xg-badge.mid { color: var(--xg-mid); }
 .xg-badge.low { color: var(--xg-low); }
+
+@media (min-width: 720px) {
+  .coupon-link {
+    grid-template-columns: 3rem minmax(0, 1fr) 2.6rem 2.8rem;
+    gap: 0.45rem 0.65rem;
+  }
+  .coupon-home,
+  .coupon-away { font-size: 0.88rem; }
+  .coupon-score { font-size: 1.05rem; }
+}
 
 .empty {
   margin: 0.35rem var(--pad-x);
@@ -1252,4 +1477,13 @@ button:focus-visible,
     grid-template-columns: 3rem minmax(0, 1fr) 2.5rem;
   }
   .match-link--sched .league-col { display: none; }
+  .coupon-link {
+    grid-template-columns: 2.4rem minmax(0, 1fr) 2.1rem 2.1rem;
+    gap: 0.25rem 0.3rem;
+    padding-right: 0.2rem;
+  }
+  .coupon-home,
+  .coupon-away { font-size: 0.76rem; }
+  .coupon-odds { padding: 0 0.4rem; font-size: 0.52rem; }
+  .day-filter { padding: 0.24rem 0.42rem; font-size: 0.58rem; }
 }

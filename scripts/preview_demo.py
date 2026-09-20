@@ -30,6 +30,8 @@ from goal_xg.web.app import (  # noqa: E402
     _feature_rows,
     _group_by_league,
     _xg_band,
+    build_day_list,
+    group_day_list_by_league,
 )
 
 _WEB_DIR = _ROOT / "goal_xg" / "web"
@@ -149,6 +151,92 @@ def _demo_board() -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict
     return cards, candidates, league_groups
 
 
+def _demo_scheduled() -> list[dict[str, Any]]:
+    """Fuller Big-5 day programme for the compact daily list preview."""
+    extra = [
+        {
+            "fixture_id": "demo-napoli-lazio",
+            "home_name": "Napoli",
+            "away_name": "Lazio",
+            "league_name": "Serie A",
+            "kickoff_time": "20:45",
+            "kickoff_utc": "2099-01-01T19:45:00+00:00",
+            "status": "scheduled",
+            "is_00": True,
+        },
+        {
+            "fixture_id": "demo-tottenham-newcastle",
+            "home_name": "Tottenham",
+            "away_name": "Newcastle",
+            "league_name": "Premier League",
+            "kickoff_time": "18:30",
+            "kickoff_utc": "2099-01-01T17:30:00+00:00",
+            "status": "scheduled",
+            "is_00": True,
+        },
+        {
+            "fixture_id": "demo-sevilla-betis",
+            "home_name": "Sevilla",
+            "away_name": "Real Betis",
+            "league_name": "La Liga",
+            "kickoff_time": "16:15",
+            "kickoff_utc": "2099-01-01T15:15:00+00:00",
+            "status": "scheduled",
+            "is_00": True,
+        },
+        {
+            "fixture_id": "demo-leverkusen-leipzig",
+            "home_name": "Bayer Leverkusen",
+            "away_name": "RB Leipzig",
+            "league_name": "Bundesliga",
+            "kickoff_time": "15:30",
+            "kickoff_utc": "2099-01-01T14:30:00+00:00",
+            "status": "scheduled",
+            "is_00": True,
+        },
+        {
+            "fixture_id": "demo-lyon-lille",
+            "home_name": "Lyon",
+            "away_name": "Lille",
+            "league_name": "Ligue 1",
+            "kickoff_time": "17:00",
+            "kickoff_utc": "2099-01-01T16:00:00+00:00",
+            "status": "finished",
+            "score_home": 1,
+            "score_away": 1,
+            "is_00": False,
+        },
+        {
+            "fixture_id": "demo-atalanta-fiorentina",
+            "home_name": "Atalanta",
+            "away_name": "Fiorentina",
+            "league_name": "Serie A",
+            "kickoff_time": "12:30",
+            "kickoff_utc": "2099-01-01T11:30:00+00:00",
+            "status": "finished",
+            "score_home": 2,
+            "score_away": 0,
+            "is_00": False,
+        },
+    ]
+    # Include live fixtures as scheduled-day rows so merge overlays clocks.
+    from goal_xg.live30.board import schedule_row_card
+
+    live_as_day = []
+    for row in _demo_raw_rows():
+        card = schedule_row_card(
+            {
+                **row,
+                "matchStatus": "LIVE",
+                "matchLive": "1",
+                "matchTime": "15:00",
+                "kickoffUtc": "2099-01-01T14:00:00+00:00",
+            }
+        )
+        live_as_day.append(card)
+    return live_as_day + extra
+
+
 def _demo_score(card: dict[str, Any]) -> dict[str, Any]:
     """Fixture score payload: shot-index components + live stats."""
     from goal_xg.live30.score import score_live30
@@ -263,24 +351,14 @@ def create_preview_app() -> FastAPI:
     def index(request: Request) -> HTMLResponse:
         live_cards, candidates, league_groups = _demo_board()
         focus = candidates[0] if candidates else (live_cards[0] if live_cards else None)
-        scheduled = [
-            {
-                "fixture_id": "demo-napoli-lazio",
-                "home_name": "Napoli",
-                "away_name": "Lazio",
-                "league_name": "Serie A",
-                "kickoff_time": "20:45",
-                "status": "scheduled",
-            },
-            {
-                "fixture_id": "demo-tottenham-newcastle",
-                "home_name": "Tottenham",
-                "away_name": "Newcastle",
-                "league_name": "Premier League",
-                "kickoff_time": "18:30",
-                "status": "scheduled",
-            },
-        ]
+        scheduled = _demo_scheduled()
+        day_cards = build_day_list(
+            scheduled,
+            live_cards=live_cards,
+            candidates=candidates,
+            focus=focus,
+        )
+        day_groups = group_day_list_by_league(day_cards)
         return _TEMPLATES.TemplateResponse(
             request,
             "index.html",
@@ -292,6 +370,9 @@ def create_preview_app() -> FastAPI:
                 "focus": focus,
                 "focus_reason": "finestra" if focus and focus.get("in_window") else "live_00",
                 "scheduled": scheduled,
+                "day_cards": day_cards,
+                "day_groups": day_groups,
+                "day_count": len(day_cards),
                 "nav_active": "board",
                 # No auto-refresh on preview (stable screenshots).
                 "refresh_seconds": None,
