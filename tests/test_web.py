@@ -41,10 +41,11 @@ def test_index_without_key_shows_alert(monkeypatch) -> None:
     assert resp.status_code == 200
     assert "text/html" in resp.headers["content-type"]
     assert "GOAL_API_KEY" in resp.text
-    assert "Oggi" in resp.text and "Big-5" in resp.text
+    assert "Partite di oggi" in resp.text
     assert "day-list" in resp.text or "coupon-list" in resp.text or "empty" in resp.text
     assert "Goal" in resp.text and "xG" in resp.text
     assert "day-filters" in resp.text or "Tutte" in resp.text
+    assert 'data-filter="focus"' in resp.text
 
 
 def test_static_css(monkeypatch) -> None:
@@ -60,6 +61,8 @@ def test_static_css(monkeypatch) -> None:
     assert ".coupon-row" in resp.text
     assert ".day-filters" in resp.text
     assert ".coupon-link" in resp.text
+    assert "min-height: 1.85rem" in resp.text
+    assert ".board-head--compact" in resp.text
     assert ".xg-ring" in resp.text
     assert ":focus-visible" in resp.text
     assert "--accent" in resp.text or "--brand-accent" in resp.text
@@ -454,8 +457,9 @@ def test_index_and_api_live_share_one_fixtures_live(monkeypatch) -> None:
     # Focus/window still surfaces the in-window 0-0; day list shows ALL today's matches.
     assert resp.text.count("fx-live") >= 1
     assert "fx-scored" in resp.text  # compact day list keeps settled live rows
-    assert "Oggi" in resp.text and "Big-5" in resp.text
+    assert "Partite di oggi" in resp.text
     assert "day-filters" in resp.text
+    assert 'data-filter="focus"' in resp.text
     assert "fx-sched" in resp.text
     assert "coupon-row" in resp.text or "day-list" in resp.text
     assert "brand-xg" in resp.text

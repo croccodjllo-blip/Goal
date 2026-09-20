@@ -134,6 +134,7 @@ def test_build_day_list_merges_live_and_keeps_all() -> None:
     assert by_id["a"]["minute"] == 30
     assert by_id["a"]["is_focus"] is True
     assert "win" in by_id["a"]["filter_tags"]
+    assert "focus" in by_id["a"]["filter_tags"]
     assert by_id["b"]["status"] == "scheduled"
     assert "oggi" in by_id["b"]["filter_tags"]
     groups = group_day_list_by_league(day)

@@ -116,9 +116,9 @@ button:focus-visible,
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.65rem;
+  gap: 0.55rem;
   min-height: var(--top-h);
-  padding: 0.55rem var(--pad-x);
+  padding: 0.4rem var(--pad-x);
   background: color-mix(in srgb, var(--bg) 90%, transparent);
   border-bottom: 1px solid var(--line);
   backdrop-filter: blur(14px);
@@ -228,24 +228,28 @@ button:focus-visible,
 }
 
 .wrap {
-  padding: 0.55rem 0 2rem;
+  padding: 0.35rem 0 1.5rem;
   max-width: var(--max);
   margin: 0 auto;
 }
 
+body.page-board {
+  --top-h: 48px;
+}
+
 /* —— Board head (compact daily list) —— */
 .board-head {
-  padding: 0.55rem var(--pad-x) 0.25rem;
-  scroll-margin-top: calc(var(--top-h) + 0.25rem);
+  padding: 0.35rem var(--pad-x) 0.15rem;
+  scroll-margin-top: calc(var(--top-h) + 0.2rem);
 }
 .board-head--compact h1 {
-  font-size: clamp(1.25rem, 4vw, 1.55rem);
+  font-size: clamp(1.05rem, 3.4vw, 1.28rem);
 }
 .board-head-row {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 0.5rem;
+  gap: 0.45rem;
   flex-wrap: wrap;
   min-width: 0;
 }
@@ -253,31 +257,32 @@ button:focus-visible,
   margin: 0;
   min-width: 0;
   font-family: var(--display);
-  font-size: clamp(1.35rem, 4.5vw, 1.7rem);
+  font-size: clamp(1.15rem, 3.8vw, 1.4rem);
   font-weight: 800;
   letter-spacing: 0.03em;
   text-transform: uppercase;
   line-height: 1.05;
 }
 .board-head p {
-  margin: 0.2rem 0 0;
+  margin: 0.12rem 0 0;
   color: var(--muted);
-  font-size: 0.72rem;
+  font-size: 0.65rem;
   max-width: 40rem;
-  line-height: 1.35;
+  line-height: 1.3;
+  letter-spacing: 0.02em;
 }
 .board-meta {
   display: inline-flex;
   align-items: center;
-  gap: 0.55rem;
+  gap: 0.4rem;
 }
 .board-count {
   font-family: var(--mono);
-  font-size: 0.72rem;
+  font-size: 0.66rem;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   color: var(--best);
-  padding: 0.12rem 0.4rem;
+  padding: 0.08rem 0.32rem;
   border: 1px solid color-mix(in srgb, var(--best) 35%, var(--line));
   border-radius: 3px;
   background: var(--best-dim);
@@ -285,17 +290,22 @@ button:focus-visible,
 .board-pulse {
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
+  gap: 0.28rem;
   font-family: var(--mono);
-  font-size: 0.6rem;
+  font-size: 0.55rem;
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--live);
 }
+.board-pulse--window { color: var(--window); }
+.board-pulse--window .board-pulse-dot {
+  background: var(--window);
+  box-shadow: 0 0 0 0 rgba(255, 159, 26, 0.55);
+}
 .board-pulse-dot {
-  width: 0.4rem;
-  height: 0.4rem;
+  width: 0.35rem;
+  height: 0.35rem;
   border-radius: 50%;
   background: var(--live);
   box-shadow: 0 0 0 0 rgba(26, 227, 106, 0.55);
@@ -324,13 +334,13 @@ button:focus-visible,
 .day-filters {
   display: flex;
   align-items: center;
-  gap: 0.28rem;
+  gap: 0.22rem;
   flex-wrap: wrap;
-  padding: 0.35rem var(--pad-x) 0.45rem;
+  padding: 0.28rem var(--pad-x) 0.32rem;
   position: sticky;
   top: var(--top-h);
   z-index: 30;
-  background: color-mix(in srgb, var(--bg) 92%, transparent);
+  background: color-mix(in srgb, var(--bg) 94%, transparent);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
   border-bottom: 1px solid var(--line-soft);
@@ -338,18 +348,18 @@ button:focus-visible,
 .day-filter {
   appearance: none;
   margin: 0;
-  padding: 0.28rem 0.55rem;
+  padding: 0.22rem 0.45rem;
   border: 1px solid var(--line);
   border-radius: 3px;
   background: var(--surface);
   color: var(--muted);
   font-family: var(--mono);
-  font-size: 0.62rem;
+  font-size: 0.58rem;
   font-weight: 700;
   letter-spacing: 0.05em;
   text-transform: uppercase;
   cursor: pointer;
-  line-height: 1.2;
+  line-height: 1.15;
 }
 .day-filter:hover {
   color: var(--text);
@@ -375,7 +385,7 @@ button:focus-visible,
 
 /* —— Compact coupon day list —— */
 .day-list {
-  padding: 0.15rem 0 0.5rem;
+  padding: 0.05rem 0 0.35rem;
 }
 .league-block {
   margin: 0;
@@ -383,16 +393,16 @@ button:focus-visible,
 .league-rail {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
-  padding: 0.35rem var(--pad-x) 0.2rem;
+  gap: 0.35rem;
+  padding: 0.28rem var(--pad-x) 0.14rem;
   font-family: var(--mono);
-  font-size: 0.62rem;
+  font-size: 0.58rem;
   font-weight: 600;
   color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.07em;
   border-bottom: 1px solid var(--line-soft);
-  background: color-mix(in srgb, var(--surface) 55%, transparent);
+  background: color-mix(in srgb, var(--surface) 45%, transparent);
 }
 .league-n {
   margin-left: auto;
@@ -400,8 +410,8 @@ button:focus-visible,
   font-variant-numeric: tabular-nums;
 }
 .league-dot {
-  width: 5px;
-  height: 5px;
+  width: 4px;
+  height: 4px;
   border-radius: 50%;
   background: var(--live);
   flex-shrink: 0;
@@ -417,7 +427,7 @@ button:focus-visible,
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: stretch;
   border-bottom: 1px solid var(--line-soft);
-  min-height: 2.15rem;
+  min-height: 1.85rem;
 }
 .coupon-row.is-window {
   background: linear-gradient(90deg, var(--window-dim), transparent 55%);
@@ -428,11 +438,11 @@ button:focus-visible,
 }
 .coupon-link {
   display: grid;
-  grid-template-columns: 2.65rem minmax(0, 1fr) 2.4rem 2.4rem;
+  grid-template-columns: 2.45rem minmax(0, 1fr) 2.15rem 2.2rem;
   align-items: center;
-  gap: 0.35rem 0.45rem;
+  gap: 0.25rem 0.35rem;
   min-width: 0;
-  padding: 0.28rem 0.35rem 0.28rem var(--pad-x);
+  padding: 0.18rem 0.3rem 0.18rem var(--pad-x);
   color: inherit;
   text-decoration: none;
 }
@@ -443,7 +453,7 @@ button:focus-visible,
 }
 .coupon-time {
   font-family: var(--mono);
-  font-size: 0.72rem;
+  font-size: 0.66rem;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   letter-spacing: 0;
@@ -456,13 +466,13 @@ button:focus-visible,
 .coupon-teams {
   display: flex;
   align-items: baseline;
-  gap: 0.28rem;
+  gap: 0.22rem;
   min-width: 0;
   overflow: hidden;
 }
 .coupon-home,
 .coupon-away {
-  font-size: 0.82rem;
+  font-size: 0.78rem;
   font-weight: 600;
   letter-spacing: -0.01em;
   white-space: nowrap;
@@ -472,16 +482,16 @@ button:focus-visible,
 .coupon-sep {
   flex-shrink: 0;
   color: var(--muted);
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   font-weight: 500;
 }
 .coupon-score {
   display: inline-flex;
   align-items: baseline;
   justify-content: flex-end;
-  gap: 0.05rem;
+  gap: 0.04rem;
   font-family: var(--display);
-  font-size: 0.95rem;
+  font-size: 0.88rem;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.02em;
@@ -490,7 +500,7 @@ button:focus-visible,
 .score-colon { color: var(--muted); font-weight: 600; }
 .score-dash {
   font-family: var(--mono);
-  font-size: 0.62rem;
+  font-size: 0.58rem;
   font-weight: 600;
   color: var(--muted);
   text-transform: uppercase;
@@ -505,10 +515,10 @@ button:focus-visible,
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 0 0.55rem;
+  padding: 0 0.45rem;
   border-left: 1px solid var(--line-soft);
   font-family: var(--mono);
-  font-size: 0.58rem;
+  font-size: 0.54rem;
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -522,51 +532,52 @@ button:focus-visible,
 }
 
 .day-empty-filter {
-  margin: 0.75rem var(--pad-x);
-  padding: 0.85rem;
+  margin: 0.55rem var(--pad-x);
+  padding: 0.55rem;
   text-align: center;
   color: var(--muted);
-  font-size: 0.8rem;
+  font-size: 0.75rem;
   border: 1px dashed var(--line);
   border-radius: var(--radius);
 }
 
-/* Legacy board selectors (fixture deep-links / tests still reference) */
-.board-section { margin: 0 0 0.35rem; }
+/* Legacy thin stubs (CSS contract / fixture deep-links — no bulky cards) */
+.board-section { margin: 0 0 0.25rem; }
 .section-label {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.4rem;
   flex-wrap: wrap;
   margin: 0;
-  padding: 0.55rem var(--pad-x) 0.3rem;
+  padding: 0.35rem var(--pad-x) 0.2rem;
   font-family: var(--mono);
-  font-size: 0.66rem;
+  font-size: 0.58rem;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: var(--muted);
 }
 .league-group {
-  margin: 0.15rem var(--pad-x) 0.45rem;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--surface);
-  overflow: hidden;
+  margin: 0.1rem var(--pad-x) 0.25rem;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  overflow: visible;
+  box-shadow: none;
 }
 .league-group--focus {
-  border-color: color-mix(in srgb, var(--window) 50%, var(--line));
-  box-shadow: inset 3px 0 0 var(--window);
+  border: none;
+  box-shadow: inset 2px 0 0 var(--window);
 }
 .league-header {
   display: flex;
   align-items: center;
-  gap: 0.45rem;
-  padding: 0.32rem 0.7rem;
-  background: var(--surface-2);
+  gap: 0.35rem;
+  padding: 0.22rem 0;
+  background: transparent;
   border-bottom: 1px solid var(--line-soft);
   font-family: var(--mono);
-  font-size: 0.64rem;
+  font-size: 0.58rem;
   font-weight: 600;
   color: var(--text-secondary);
   text-transform: uppercase;
@@ -581,11 +592,11 @@ button:focus-visible,
 .match-row.hot .minute-badge { color: var(--window); }
 .match-link {
   display: grid;
-  grid-template-columns: 2.75rem minmax(0, 1fr) 1.7rem 2.55rem;
+  grid-template-columns: 2.45rem minmax(0, 1fr) 1.5rem 2.2rem;
   align-items: center;
-  gap: 0.35rem 0.45rem;
-  min-height: 2.35rem;
-  padding: 0.35rem 0.7rem;
+  gap: 0.25rem 0.35rem;
+  min-height: 1.85rem;
+  padding: 0.18rem 0;
   color: inherit;
   text-decoration: none;
   transition: background 0.15s var(--ease);
@@ -598,7 +609,7 @@ button:focus-visible,
 .match-link:active { background: var(--surface-3); }
 .minute-badge {
   font-family: var(--mono);
-  font-size: 0.75rem;
+  font-size: 0.66rem;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   color: var(--live);
@@ -607,33 +618,44 @@ button:focus-visible,
 .teams {
   min-width: 0;
   display: flex;
-  flex-direction: column;
-  gap: 0.08rem;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: baseline;
+  gap: 0.22rem;
+  overflow: hidden;
 }
 .team-name {
-  font-size: 0.82rem;
+  font-size: 0.78rem;
   font-weight: 600;
   letter-spacing: -0.01em;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.team-name + .team-name::before {
+  content: "–";
+  margin-right: 0.22rem;
+  color: var(--muted);
+  font-weight: 500;
+}
 .score-col {
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 0.08rem;
+  flex-direction: row;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: 0.04rem;
   font-family: var(--display);
   font-variant-numeric: tabular-nums;
   font-weight: 700;
-  font-size: 1rem;
+  font-size: 0.88rem;
   letter-spacing: 0.02em;
-  line-height: 1.1;
+  line-height: 1;
 }
 .status-col {
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-end;
   gap: 0.1rem;
   min-width: 0;
 }
@@ -642,9 +664,9 @@ button:focus-visible,
 .sched-pill {
   display: inline-flex;
   align-items: center;
-  gap: 0.22rem;
+  gap: 0.18rem;
   font-family: var(--mono);
-  font-size: 0.55rem;
+  font-size: 0.52rem;
   font-weight: 700;
   letter-spacing: 0.05em;
   text-transform: uppercase;
@@ -652,8 +674,8 @@ button:focus-visible,
 }
 .live-pill::before {
   content: "";
-  width: 0.3rem;
-  height: 0.3rem;
+  width: 0.28rem;
+  height: 0.28rem;
   border-radius: 50%;
   background: currentColor;
   box-shadow: 0 0 0 0 rgba(26, 227, 106, 0.45);
@@ -664,16 +686,16 @@ button:focus-visible,
 .sched-pill { color: var(--accent); }
 .sched-pill::before { content: none; }
 .match-link--sched {
-  grid-template-columns: 3.1rem minmax(0, 1fr) minmax(3rem, 6rem) 2.5rem;
+  grid-template-columns: 2.8rem minmax(0, 1fr) minmax(2.5rem, 5rem) 2.2rem;
 }
 .kickoff-badge {
-  font-size: 0.68rem;
+  font-size: 0.62rem;
   letter-spacing: 0;
   white-space: nowrap;
 }
 .league-col {
   font-family: var(--mono);
-  font-size: 0.58rem;
+  font-size: 0.54rem;
   color: var(--muted);
   text-align: right;
   white-space: nowrap;
@@ -682,7 +704,7 @@ button:focus-visible,
 }
 .xg-badge {
   font-family: var(--mono);
-  font-size: 0.78rem;
+  font-size: 0.72rem;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   color: var(--text-secondary);
@@ -694,23 +716,23 @@ button:focus-visible,
 
 @media (min-width: 720px) {
   .coupon-link {
-    grid-template-columns: 3rem minmax(0, 1fr) 2.6rem 2.8rem;
-    gap: 0.45rem 0.65rem;
+    grid-template-columns: 2.75rem minmax(0, 1fr) 2.4rem 2.5rem;
+    gap: 0.35rem 0.55rem;
   }
   .coupon-home,
-  .coupon-away { font-size: 0.88rem; }
-  .coupon-score { font-size: 1.05rem; }
+  .coupon-away { font-size: 0.84rem; }
+  .coupon-score { font-size: 0.98rem; }
 }
 
 .empty {
-  margin: 0.35rem var(--pad-x);
-  padding: 1.35rem 0.95rem;
+  margin: 0.25rem var(--pad-x);
+  padding: 0.85rem 0.75rem;
   color: var(--muted);
-  font-size: 0.86rem;
+  font-size: 0.8rem;
   text-align: center;
   border: 1px dashed var(--line);
   border-radius: var(--radius);
-  background: color-mix(in srgb, var(--surface) 80%, transparent);
+  background: color-mix(in srgb, var(--surface) 70%, transparent);
 }
 
 .alert {

@@ -1,20 +1,20 @@
 {% extends "base.html" %}
 {% block body_class %}page-board{% endblock %}
-{% block title %}Goal xG — Oggi{% endblock %}
+{% block title %}Goal xG — Partite di oggi{% endblock %}
 {% block content %}
 <header class="board-head board-head--compact">
   <div class="board-head-row">
-    <h1>Oggi · Big-5</h1>
+    <h1>Partite di oggi</h1>
     <span class="board-meta">
       <span class="board-count" title="Partite in elenco">{{ day_count|default(0) }}</span>
       {% if focus and focus.in_window and focus.is_00 %}
-      <span class="board-pulse" aria-hidden="true"><span class="board-pulse-dot"></span> Finestra</span>
+      <span class="board-pulse board-pulse--window" aria-hidden="true"><span class="board-pulse-dot"></span> Finestra</span>
       {% else %}
       <span class="board-pulse" aria-hidden="true"><span class="board-pulse-dot"></span> Live</span>
       {% endif %}
     </span>
   </div>
-  <p>Elenco completo del giorno · kickoff · score · segnale Over 0.5 @~30′</p>
+  <p>Big-5 · kickoff · score · xG / 28–32′ · 1X2</p>
 </header>
 
 {% if error %}
@@ -23,6 +23,7 @@
 
 <nav class="day-filters" aria-label="Filtri elenco" data-day-filters>
   <button type="button" class="day-filter is-active" data-filter="all" aria-pressed="true">Tutte</button>
+  <button type="button" class="day-filter" data-filter="focus" aria-pressed="false">Focus</button>
   <button type="button" class="day-filter" data-filter="win" aria-pressed="false">Finestra</button>
   <button type="button" class="day-filter" data-filter="00" aria-pressed="false">0-0</button>
   <button type="button" class="day-filter" data-filter="live" aria-pressed="false">Live</button>
