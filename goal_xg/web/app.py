@@ -373,6 +373,11 @@ def build_day_list(
                 card["xg_score"] = cand["xg_score"]
                 card["xg_tone"] = cand.get("xg_tone") or _xg_tone(cand["xg_score"])
         card["is_focus"] = bool(fid and fid == focus_id)
+        card.setdefault("score_home", None)
+        card.setdefault("score_away", None)
+        card.setdefault("minute", None)
+        card.setdefault("in_window", False)
+        card.setdefault("is_00", card.get("status") == "scheduled")
         card["filter_tags"] = _day_filter_tags(card)
         out.append(_attach_board_xg(card) if card.get("xg_score") is None else card)
         if fid:
@@ -384,6 +389,8 @@ def build_day_list(
         card = dict(live)
         card.setdefault("status", "live")
         card.setdefault("kickoff_time", None)
+        card.setdefault("score_home", None)
+        card.setdefault("score_away", None)
         card["is_focus"] = bool(fid and fid == focus_id)
         if fid in cand_ids:
             card["in_window"] = True

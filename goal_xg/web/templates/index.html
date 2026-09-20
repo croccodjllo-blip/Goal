@@ -58,8 +58,10 @@
               <span class="coupon-away">{{ c.away_name }}</span>
             </span>
             <span class="coupon-score" aria-label="Punteggio">
-              {% if c.status == 'scheduled' and c.score_home is none %}
+              {% if c.status == 'scheduled' and c.score_home is none and c.score_away is none %}
               <span class="score-dash">vs</span>
+              {% elif c.score_home is none and c.score_away is none %}
+              <span class="score-dash">–</span>
               {% else %}
               <span>{{ c.score_home if c.score_home is not none else "–" }}</span><span class="score-colon">:</span><span>{{ c.score_away if c.score_away is not none else "–" }}</span>
               {% endif %}
