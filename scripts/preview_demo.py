@@ -292,6 +292,7 @@ def create_preview_app() -> FastAPI:
                 "focus": focus,
                 "focus_reason": "finestra" if focus and focus.get("in_window") else "live_00",
                 "scheduled": scheduled,
+                "nav_active": "board",
                 # No auto-refresh on preview (stable screenshots).
                 "refresh_seconds": None,
             },
