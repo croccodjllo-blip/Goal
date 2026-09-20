@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% block body_class %}page-odds{% endblock %}
 {% block title %}Goal xG — Quote{% endblock %}
 {% block content %}
 <header class="board-head">
@@ -38,55 +39,95 @@
   <article class="odds-card" id="fixture-{{ snap.fixture_id }}">
     <header class="odds-card-head">
       <div class="odds-match">
+        {% if snap.league_code %}<span class="odds-league">{{ snap.league_code }}</span>{% endif %}
         {% if snap.home_name and snap.away_name %}
         <span class="odds-teams">{{ snap.home_name }} <span class="odds-vs">–</span> {{ snap.away_name }}</span>
         {% else %}
         <span class="odds-teams mono">{{ snap.fixture_id }}</span>
         {% endif %}
-        {% if snap.league_code %}<span class="odds-league">{{ snap.league_code }}</span>{% endif %}
       </div>
       <a class="odds-api-link muted" href="/api/odds/{{ snap.fixture_id }}">JSON</a>
     </header>
+
+    {% if snap.best %}
+    <div class="odds-best-strip" aria-label="Miglior prezzo per esito">
+      <div class="odds-best-cell{% if snap.best.HOME %} has-best{% endif %}">
+        <span class="odds-best-lab">1</span>
+        {% if snap.best.HOME %}
+        <span class="odds-best-price">{{ "%.2f"|format(snap.best.HOME.price) }}</span>
+        <span class="odds-best-book">{{ book_names.get(snap.best.HOME.book_id, snap.best.HOME.book_id) }}</span>
+        {% else %}
+        <span class="odds-best-price">—</span>
+        {% endif %}
+      </div>
+      <div class="odds-best-cell{% if snap.best.DRAW %} has-best{% endif %}">
+        <span class="odds-best-lab">X</span>
+        {% if snap.best.DRAW %}
+        <span class="odds-best-price">{{ "%.2f"|format(snap.best.DRAW.price) }}</span>
+        <span class="odds-best-book">{{ book_names.get(snap.best.DRAW.book_id, snap.best.DRAW.book_id) }}</span>
+        {% else %}
+        <span class="odds-best-price">—</span>
+        {% endif %}
+      </div>
+      <div class="odds-best-cell{% if snap.best.AWAY %} has-best{% endif %}">
+        <span class="odds-best-lab">2</span>
+        {% if snap.best.AWAY %}
+        <span class="odds-best-price">{{ "%.2f"|format(snap.best.AWAY.price) }}</span>
+        <span class="odds-best-book">{{ book_names.get(snap.best.AWAY.book_id, snap.best.AWAY.book_id) }}</span>
+        {% else %}
+        <span class="odds-best-price">—</span>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+
     <div class="table-scroll" tabindex="0">
       <table class="odds-table">
         <thead>
           <tr>
-            <th scope="col">Book</th>
-            <th scope="col">1</th>
-            <th scope="col">X</th>
-            <th scope="col">2</th>
-            <th scope="col">Agg.</th>
+            <th scope="col" class="odds-col-outcome">Esito</th>
+            {% for row in snap.books %}
+            <th scope="col">{{ book_names.get(row.book_id, row.book_id) }}</th>
+            {% endfor %}
           </tr>
         </thead>
         <tbody>
-          {% for row in snap.books %}
           <tr>
-            <th scope="row">{{ book_names.get(row.book_id, row.book_id) }}</th>
+            <th scope="row"><span class="odds-outcome">1</span></th>
+            {% for row in snap.books %}
             <td class="{% if snap.best.HOME and snap.best.HOME.book_id == row.book_id %}is-best{% endif %}">
-              {{ "%.2f"|format(row.home) if row.home is not none else "—" }}
+              <span class="odds-price">{{ "%.2f"|format(row.home) if row.home is not none else "—" }}</span>
             </td>
-            <td class="{% if snap.best.DRAW and snap.best.DRAW.book_id == row.book_id %}is-best{% endif %}">
-              {{ "%.2f"|format(row.draw) if row.draw is not none else "—" }}
-            </td>
-            <td class="{% if snap.best.AWAY and snap.best.AWAY.book_id == row.book_id %}is-best{% endif %}">
-              {{ "%.2f"|format(row.away) if row.away is not none else "—" }}
-            </td>
-            <td class="mono muted">
-              {% if row.last_updated %}{{ row.last_updated.strftime("%H:%M:%S") }} UTC{% else %}—{% endif %}
-            </td>
+            {% endfor %}
           </tr>
-          {% endfor %}
+          <tr>
+            <th scope="row"><span class="odds-outcome">X</span></th>
+            {% for row in snap.books %}
+            <td class="{% if snap.best.DRAW and snap.best.DRAW.book_id == row.book_id %}is-best{% endif %}">
+              <span class="odds-price">{{ "%.2f"|format(row.draw) if row.draw is not none else "—" }}</span>
+            </td>
+            {% endfor %}
+          </tr>
+          <tr>
+            <th scope="row"><span class="odds-outcome">2</span></th>
+            {% for row in snap.books %}
+            <td class="{% if snap.best.AWAY and snap.best.AWAY.book_id == row.book_id %}is-best{% endif %}">
+              <span class="odds-price">{{ "%.2f"|format(row.away) if row.away is not none else "—" }}</span>
+            </td>
+            {% endfor %}
+          </tr>
         </tbody>
       </table>
     </div>
-    {% if snap.best %}
-    <p class="odds-best-line muted">
-      Best:
-      {% if snap.best.HOME %}1 {{ "%.2f"|format(snap.best.HOME.price) }} ({{ book_names.get(snap.best.HOME.book_id, snap.best.HOME.book_id) }}){% endif %}
-      {% if snap.best.DRAW %} · X {{ "%.2f"|format(snap.best.DRAW.price) }} ({{ book_names.get(snap.best.DRAW.book_id, snap.best.DRAW.book_id) }}){% endif %}
-      {% if snap.best.AWAY %} · 2 {{ "%.2f"|format(snap.best.AWAY.price) }} ({{ book_names.get(snap.best.AWAY.book_id, snap.best.AWAY.book_id) }}){% endif %}
+
+    <p class="odds-fresh muted">
+      Agg. UTC
+      {% for row in snap.books if row.last_updated %}
+      · {{ book_names.get(row.book_id, row.book_id) }} {{ row.last_updated.strftime("%H:%M:%S") }}
+      {% else %}
+      · —
+      {% endfor %}
     </p>
-    {% endif %}
   </article>
   {% endfor %}
 </section>

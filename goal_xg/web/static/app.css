@@ -1,34 +1,38 @@
-/* Goal xG — Night Board (SofaScore / live-scores analytics) */
+/* Goal xG — Pitch Desk (bookmaker / odds trading board) */
 
 :root {
-  --bg: #07090d;
-  --bg-mid: #0b1018;
-  --surface: #0f141c;
-  --surface-2: #151b26;
-  --surface-3: #1a2230;
-  --line: #2a3444;
-  --line-soft: #1c2431;
-  --text: #eef2f7;
-  --text-secondary: #9aa8b8;
-  --muted: #6b7787;
-  --live: #2ee56d;
-  --live-dim: rgba(46, 229, 109, 0.12);
-  --window: #f0a93b;
-  --window-dim: rgba(240, 169, 59, 0.12);
-  --waiting: #6b7787;
+  --bg: #060708;
+  --bg-mid: #0a0c10;
+  --surface: #10141b;
+  --surface-2: #161c26;
+  --surface-3: #1c2430;
+  --line: #2a3340;
+  --line-soft: #1e2632;
+  --text: #f2f4f7;
+  --text-secondary: #a8b2c0;
+  --muted: #6e7a8a;
+  --live: #1ae36a;
+  --live-dim: rgba(26, 227, 106, 0.12);
+  --best: #f0c14b;
+  --best-dim: rgba(240, 193, 75, 0.16);
+  --best-ink: #1a1406;
+  --window: #ff9f1a;
+  --window-dim: rgba(255, 159, 26, 0.12);
+  --waiting: #6e7a8a;
   --danger: #ff4d5e;
   --danger-dim: rgba(255, 77, 94, 0.12);
-  --accent: #6ec3e8;
-  --accent-dim: rgba(110, 195, 232, 0.12);
-  --xg-high: #6ec3e8;
-  --xg-mid: #f0a93b;
+  --accent: #7ec8e3;
+  --accent-dim: rgba(126, 200, 227, 0.12);
+  --xg-high: #7ec8e3;
+  --xg-mid: #ff9f1a;
   --xg-low: #7a8696;
+  --odds-cell: #0c1016;
   --font: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
   --display: "Barlow Condensed", "IBM Plex Sans", system-ui, sans-serif;
   --mono: "IBM Plex Mono", "SF Mono", "Consolas", ui-monospace, monospace;
   --top-h: 52px;
-  --max: 760px;
-  --radius: 10px;
+  --max: 780px;
+  --radius: 6px;
   --pad-x: 0.9rem;
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
 }
@@ -47,21 +51,27 @@ body {
   min-height: 100vh;
   line-height: 1.45;
   background:
-    linear-gradient(180deg, #0b1220 0%, var(--bg) 42%, #06080c 100%);
+    radial-gradient(120% 80% at 50% -10%, #0f1a14 0%, transparent 55%),
+    linear-gradient(180deg, #0a0e12 0%, var(--bg) 45%, #040506 100%);
   background-attachment: fixed;
 }
 
+body.page-odds {
+  --max: 920px;
+}
+
+/* Subtle pitch-line grid — trading floor, not SaaS glow */
 body::before {
   content: "";
   position: fixed;
   inset: 0;
   pointer-events: none;
   z-index: 0;
-  opacity: 0.35;
+  opacity: 0.28;
   background:
-    linear-gradient(90deg, transparent 0%, transparent 49.6%, rgba(110, 195, 232, 0.03) 50%, transparent 50.4%, transparent 100%),
-    linear-gradient(0deg, transparent 0%, transparent 49.6%, rgba(46, 229, 109, 0.025) 50%, transparent 50.4%, transparent 100%);
-  background-size: 48px 48px;
+    linear-gradient(90deg, transparent 0%, transparent 49.7%, rgba(26, 227, 106, 0.035) 50%, transparent 50.3%, transparent 100%),
+    linear-gradient(0deg, transparent 0%, transparent 49.7%, rgba(240, 193, 75, 0.02) 50%, transparent 50.3%, transparent 100%);
+  background-size: 56px 56px;
 }
 
 .skip-link {
@@ -70,8 +80,8 @@ body::before {
   top: 0;
   z-index: 100;
   padding: 0.5rem 0.75rem;
-  background: var(--accent);
-  color: #061018;
+  background: var(--best);
+  color: var(--best-ink);
   font-weight: 600;
   font-size: 0.85rem;
 }
@@ -87,7 +97,7 @@ button:focus-visible,
 .match-link:focus-visible,
 .brand:focus-visible,
 .table-scroll:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--best);
   outline-offset: 2px;
 }
 
@@ -109,10 +119,10 @@ button:focus-visible,
   gap: 0.65rem;
   min-height: var(--top-h);
   padding: 0.55rem var(--pad-x);
-  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  background: color-mix(in srgb, var(--bg) 90%, transparent);
   border-bottom: 1px solid var(--line);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
 }
 
 .brand {
@@ -121,23 +131,23 @@ button:focus-visible,
   gap: 0.55rem;
   min-width: 0;
   color: var(--text);
-  border-radius: 6px;
+  border-radius: 4px;
 }
 .brand:hover { color: var(--text); }
 
 .top-nav {
   display: inline-flex;
   align-items: center;
-  gap: 0.25rem;
+  gap: 0.2rem;
   margin-left: auto;
   margin-right: 0.35rem;
 }
 .top-nav-link {
   padding: 0.35rem 0.65rem;
-  border-radius: 6px;
+  border-radius: 4px;
   font-size: 0.78rem;
   font-weight: 600;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
   color: var(--muted);
   border: 1px solid transparent;
@@ -147,9 +157,9 @@ button:focus-visible,
   background: var(--surface-2);
 }
 .top-nav-link.is-active {
-  color: var(--text);
-  background: var(--surface-3);
-  border-color: var(--line);
+  color: var(--bg);
+  background: var(--best);
+  border-color: color-mix(in srgb, var(--best) 70%, #fff);
 }
 
 .brand-mark {
@@ -158,14 +168,14 @@ button:focus-visible,
   width: 1.7rem;
   height: 1.7rem;
   flex-shrink: 0;
-  border-radius: 6px;
+  border-radius: 4px;
   font-family: var(--display);
   font-size: 1.05rem;
   font-weight: 800;
   letter-spacing: 0.02em;
-  color: #061018;
-  background: linear-gradient(145deg, #9ad6f0 0%, var(--accent) 55%, #4aa3c8 100%);
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent);
+  color: var(--best-ink);
+  background: linear-gradient(145deg, #ffe08a 0%, var(--best) 55%, #c9a030 100%);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--best) 40%, transparent);
 }
 
 .brand-text {
@@ -176,9 +186,9 @@ button:focus-visible,
 }
 .brand-word {
   font-family: var(--display);
-  font-size: 1.35rem;
-  font-weight: 700;
-  letter-spacing: 0.02em;
+  font-size: 1.4rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
   text-transform: uppercase;
   line-height: 1;
 }
@@ -234,13 +244,15 @@ button:focus-visible,
   justify-content: space-between;
   gap: 0.75rem;
   flex-wrap: wrap;
+  min-width: 0;
 }
 .board-head h1 {
   margin: 0;
+  min-width: 0;
   font-family: var(--display);
-  font-size: clamp(1.55rem, 4.5vw, 1.9rem);
+  font-size: clamp(1.6rem, 5vw, 2rem);
   font-weight: 800;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.03em;
   text-transform: uppercase;
   line-height: 1.05;
 }
@@ -266,14 +278,14 @@ button:focus-visible,
   height: 0.45rem;
   border-radius: 50%;
   background: var(--live);
-  box-shadow: 0 0 0 0 rgba(46, 229, 109, 0.55);
+  box-shadow: 0 0 0 0 rgba(26, 227, 106, 0.55);
   animation: live-pulse 1.8s var(--ease) infinite;
 }
 
 @keyframes live-pulse {
-  0% { box-shadow: 0 0 0 0 rgba(46, 229, 109, 0.5); }
-  70% { box-shadow: 0 0 0 0.45rem rgba(46, 229, 109, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(46, 229, 109, 0); }
+  0% { box-shadow: 0 0 0 0 rgba(26, 227, 106, 0.5); }
+  70% { box-shadow: 0 0 0 0.45rem rgba(26, 227, 106, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(26, 227, 106, 0); }
 }
 
 .board-section { margin: 0 0 0.35rem; }
@@ -300,28 +312,25 @@ button:focus-visible,
   border-radius: var(--radius);
   background: var(--surface);
   overflow: hidden;
-  box-shadow: 0 1px 0 color-mix(in srgb, #fff 3%, transparent) inset;
 }
 .league-group--focus {
-  border-color: color-mix(in srgb, var(--window) 45%, var(--line));
-  box-shadow:
-    0 0 0 1px color-mix(in srgb, var(--window) 18%, transparent),
-    0 1px 0 color-mix(in srgb, #fff 3%, transparent) inset;
+  border-color: color-mix(in srgb, var(--window) 50%, var(--line));
+  box-shadow: inset 3px 0 0 var(--window);
 }
 
 .league-header {
   display: flex;
   align-items: center;
   gap: 0.45rem;
-  padding: 0.45rem 0.85rem;
-  background: linear-gradient(180deg, var(--surface-2), var(--surface-3));
+  padding: 0.42rem 0.85rem;
+  background: var(--surface-2);
   border-bottom: 1px solid var(--line-soft);
   font-family: var(--mono);
   font-size: 0.68rem;
   font-weight: 600;
   color: var(--text-secondary);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.06em;
 }
 
 .league-dot {
@@ -330,7 +339,6 @@ button:focus-visible,
   border-radius: 50%;
   background: var(--live);
   flex-shrink: 0;
-  box-shadow: 0 0 8px color-mix(in srgb, var(--live) 55%, transparent);
 }
 
 .match-list {
@@ -342,7 +350,7 @@ button:focus-visible,
 .match-row { border-bottom: 1px solid var(--line-soft); }
 .match-row:last-child { border-bottom: none; }
 .match-row.hot {
-  background: linear-gradient(90deg, var(--window-dim), transparent 72%);
+  background: linear-gradient(90deg, var(--window-dim), transparent 70%);
 }
 .match-row.hot .minute-badge { color: var(--window); }
 
@@ -399,7 +407,7 @@ button:focus-visible,
   font-family: var(--display);
   font-variant-numeric: tabular-nums;
   font-weight: 700;
-  font-size: 1.05rem;
+  font-size: 1.1rem;
   letter-spacing: 0.02em;
   line-height: 1.15;
 }
@@ -431,7 +439,7 @@ button:focus-visible,
   height: 0.35rem;
   border-radius: 50%;
   background: currentColor;
-  box-shadow: 0 0 0 0 rgba(46, 229, 109, 0.45);
+  box-shadow: 0 0 0 0 rgba(26, 227, 106, 0.45);
   animation: live-pulse 1.8s var(--ease) infinite;
 }
 .window-pill { color: var(--window); }
@@ -471,7 +479,7 @@ button:focus-visible,
 
 .empty {
   margin: 0.35rem var(--pad-x);
-  padding: 1.2rem 0.95rem;
+  padding: 1.35rem 0.95rem;
   color: var(--muted);
   font-size: 0.86rem;
   text-align: center;
@@ -485,18 +493,19 @@ button:focus-visible,
   padding: 0.75rem 0.9rem;
   background: var(--danger-dim);
   border: 1px solid color-mix(in srgb, var(--danger) 40%, var(--line));
-  border-radius: 8px;
+  border-radius: var(--radius);
   color: var(--text-secondary);
   font-size: 0.85rem;
 }
 .alert--muted {
-  background: var(--accent-dim);
-  border-color: color-mix(in srgb, var(--accent) 35%, var(--line));
+  background: var(--best-dim);
+  border-color: color-mix(in srgb, var(--best) 40%, var(--line));
 }
+.alert--muted strong { color: var(--best); }
 .alert code {
   font-family: var(--mono);
   font-size: 0.8em;
-  color: var(--accent);
+  color: var(--best);
 }
 
 .muted { color: var(--muted); }
@@ -522,10 +531,8 @@ button:focus-visible,
   padding: 1rem 0.95rem 1.05rem;
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  background:
-    linear-gradient(180deg, var(--surface-2) 0%, var(--surface) 100%);
+  background: linear-gradient(180deg, var(--surface-2) 0%, var(--surface) 100%);
   scroll-margin-top: calc(var(--top-h) + 0.35rem);
-  box-shadow: 0 1px 0 color-mix(in srgb, #fff 4%, transparent) inset;
 }
 .fixture-fallback {
   margin: 0;
@@ -638,9 +645,7 @@ button:focus-visible,
     var(--ring-color) calc(var(--pct) * 1%),
     color-mix(in srgb, var(--line) 80%, transparent) 0
   );
-  box-shadow:
-    0 0 0 1px color-mix(in srgb, var(--ring-color) 25%, transparent),
-    0 0 28px color-mix(in srgb, var(--ring-color) 12%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--ring-color) 25%, transparent);
 }
 .xg-ring::after {
   content: "";
@@ -717,7 +722,7 @@ button:focus-visible,
   text-transform: uppercase;
   letter-spacing: 0.07em;
   color: var(--text-secondary);
-  background: linear-gradient(180deg, var(--surface-2), var(--surface-3));
+  background: var(--surface-2);
   border-bottom: 1px solid var(--line-soft);
 }
 .feat-row {
@@ -997,7 +1002,7 @@ button:focus-visible,
 
 @media (min-width: 640px) {
   .wrap { padding-top: 0.75rem; }
-  --pad-x: 1.1rem;
+  :root { --pad-x: 1.1rem; }
   .match-link {
     grid-template-columns: 3rem minmax(0, 1fr) 1.9rem 2.8rem;
     padding: 0.65rem 1rem;
@@ -1031,10 +1036,12 @@ button:focus-visible,
   }
 }
 
-/* —— Odds / Quote —— */
+/* —— Odds / Quote (bookmaker comparison) —— */
+.board-pulse--odds { color: var(--best); }
 .board-pulse--odds .board-pulse-dot {
-  background: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-dim);
+  background: var(--best);
+  box-shadow: 0 0 0 3px var(--best-dim);
+  animation: none;
 }
 
 .odds-book-list {
@@ -1043,102 +1050,195 @@ button:focus-visible,
   padding: 0 var(--pad-x) 0.75rem;
   display: flex;
   flex-wrap: wrap;
-  gap: 0.45rem;
+  gap: 0.4rem;
 }
 .odds-book-chip {
   display: inline-flex;
   align-items: baseline;
   gap: 0.4rem;
-  padding: 0.4rem 0.7rem;
+  padding: 0.32rem 0.65rem;
   background: var(--surface-2);
   border: 1px solid var(--line);
-  border-radius: 8px;
-  font-size: 0.85rem;
+  border-radius: 4px;
+  font-size: 0.82rem;
 }
-.odds-book-chip.is-off {
-  opacity: 0.45;
-}
+.odds-book-chip.is-off { opacity: 0.45; }
 .odds-book-name {
   font-weight: 600;
   color: var(--text);
 }
 .odds-book-note {
-  font-size: 0.72rem;
+  font-size: 0.68rem;
   color: var(--muted);
   font-family: var(--mono);
 }
 
 .odds-card {
   margin: 0 var(--pad-x) 1rem;
-  padding: 0.85rem 0.9rem 0.7rem;
+  padding: 0.85rem 0.85rem 0.65rem;
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius);
+  transition: border-color 0.15s var(--ease);
+}
+.odds-card:hover {
+  border-color: color-mix(in srgb, var(--best) 35%, var(--line));
 }
 .odds-card-head {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 0.75rem;
-  margin-bottom: 0.65rem;
+  margin-bottom: 0.7rem;
+  min-width: 0;
 }
 .odds-match {
   display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0.45rem 0.75rem;
+  flex-direction: column;
+  gap: 0.2rem;
   min-width: 0;
 }
 .odds-teams {
   font-family: var(--display);
   font-weight: 700;
-  font-size: 1.15rem;
+  font-size: clamp(1.15rem, 3.5vw, 1.35rem);
   letter-spacing: 0.02em;
+  text-transform: uppercase;
   color: var(--text);
+  line-height: 1.15;
 }
 .odds-vs { color: var(--muted); font-weight: 500; }
 .odds-league {
-  font-size: 0.72rem;
+  font-size: 0.68rem;
   font-family: var(--mono);
-  color: var(--accent);
+  color: var(--muted);
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.08em;
+  order: -1;
 }
-.odds-api-link { font-size: 0.75rem; white-space: nowrap; }
+.odds-api-link { font-size: 0.72rem; white-space: nowrap; flex-shrink: 0; }
+
+/* Best-price strip — scan 1X2 in <2s */
+.odds-best-strip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.4rem;
+  margin-bottom: 0.75rem;
+}
+.odds-best-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.12rem;
+  padding: 0.55rem 0.35rem 0.5rem;
+  background: var(--odds-cell);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  min-width: 0;
+}
+.odds-best-cell.has-best {
+  border-color: color-mix(in srgb, var(--best) 55%, var(--line));
+  background: linear-gradient(180deg, var(--best-dim), var(--odds-cell));
+}
+.odds-best-lab {
+  font-family: var(--mono);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+.odds-best-price {
+  font-family: var(--mono);
+  font-size: clamp(1.15rem, 4vw, 1.35rem);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  color: var(--best);
+  line-height: 1.1;
+}
+.odds-best-book {
+  font-family: var(--mono);
+  font-size: 0.58rem;
+  color: var(--text-secondary);
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
 
 .odds-table {
   width: 100%;
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
   font-variant-numeric: tabular-nums;
   font-size: 0.9rem;
+  min-width: 18rem;
 }
 .odds-table th,
 .odds-table td {
-  padding: 0.45rem 0.5rem;
-  text-align: right;
+  padding: 0.4rem 0.35rem;
+  text-align: center;
   border-bottom: 1px solid var(--line-soft);
+  vertical-align: middle;
 }
-.odds-table th[scope="col"] {
+.odds-table thead th {
   color: var(--muted);
   font-weight: 600;
-  font-size: 0.72rem;
+  font-size: 0.68rem;
+  font-family: var(--mono);
   text-transform: uppercase;
   letter-spacing: 0.05em;
+  padding-bottom: 0.5rem;
+  border-bottom-color: var(--line);
 }
+.odds-table th.odds-col-outcome,
 .odds-table th[scope="row"] {
   text-align: left;
-  font-weight: 600;
+  width: 3.2rem;
+}
+.odds-outcome {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.6rem;
+  padding: 0.2rem 0.35rem;
+  font-family: var(--display);
+  font-size: 1rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
   color: var(--text-secondary);
+  background: var(--surface-2);
+  border: 1px solid var(--line-soft);
+  border-radius: 3px;
 }
-.odds-table td.is-best {
-  color: var(--live);
-  font-weight: 700;
-  background: var(--live-dim);
-}
-.odds-best-line {
-  margin: 0.55rem 0 0;
-  font-size: 0.78rem;
+.odds-price {
+  display: inline-block;
+  min-width: 3.4rem;
+  padding: 0.4rem 0.45rem;
   font-family: var(--mono);
+  font-size: 0.95rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  color: var(--text);
+  background: var(--odds-cell);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  line-height: 1.2;
+}
+.odds-table td.is-best .odds-price {
+  color: var(--best-ink);
+  font-weight: 700;
+  background: var(--best);
+  border-color: color-mix(in srgb, var(--best) 80%, #fff);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--best) 30%, transparent);
+}
+.odds-fresh {
+  margin: 0.55rem 0 0;
+  font-size: 0.68rem;
+  font-family: var(--mono);
+  letter-spacing: 0.02em;
 }
 
 .mono { font-family: var(--mono); }
@@ -1146,6 +1246,10 @@ button:focus-visible,
 @media (max-width: 520px) {
   .top-nav-link { padding: 0.3rem 0.45rem; font-size: 0.7rem; }
   .tag-full { display: none; }
-  .odds-teams { font-size: 1.02rem; }
+  .odds-teams { font-size: 1.05rem; }
+  .odds-price { min-width: 2.9rem; font-size: 0.88rem; padding: 0.35rem 0.3rem; }
+  .match-link--sched {
+    grid-template-columns: 3rem minmax(0, 1fr) 2.5rem;
+  }
+  .match-link--sched .league-col { display: none; }
 }
-
