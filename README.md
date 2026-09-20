@@ -11,6 +11,7 @@ Lean typed Python package for Alessandro’s **Over 0.5 FT** product index **xG 
 | Fixtures / statistics / history | `goal_xg/clients/goal_api.py` | REST — stats densified **only** on 0-0 in 28–32′ |
 | Shot-stat **enrichment** | `goal_xg/clients/api_sports.py` | API-Sports v3 — fills missing tiri/SoT/xG/… |
 | Coach **identity** (name / id) | `goal_xg/clients/football_data.py` | Soft feature; not H2H |
+| Odds 1X2 comparison (scaffold) | `goal_xg/odds/` + `clients/odss.py` | Bet365/Snai/Sisal — **mock** until `ODSS_API_KEY` + live client |
 | Weather (optional) | Open-Meteo | Fail-closed omit + renorm if missing |
 
 Auth (env only — **never commit**):
@@ -20,6 +21,7 @@ Auth (env only — **never commit**):
 | `GOAL_API_KEY` | Yes (live/CLI/web data) | Bearer for GOAL REST + WS |
 | `API_SPORTS_KEY` or `APISPORTS_KEY` | Optional | API-Football v3 enrich (`x-apisports-key`) |
 | `FOOTBALL_DATA_API_KEY` or `FOOTBALL_DATA_TOKEN` | Optional | football-data.org coach identity |
+| `ODSS_API_KEY` | Optional | odss-api.com — app runs without it (Quote = mock) |
 
 ## Locked product rules
 
@@ -85,9 +87,9 @@ python3 -m goal_xg.web
 On Windows you can use the same `uvicorn` / `goal-xg-web` commands after activating `.venv`, or run `.\scripts\run-web.ps1`.
 
 Then open `http://127.0.0.1:8000/` — live Big-5 cards + 0-0 @30′ candidates.
-Fixture detail: `/fixtures/{id}` · JSON: `/api/live`, `/api/live30/{id}` · `/health`.
+Fixture detail: `/fixtures/{id}` · Quote (odds scaffold): `/odds` · JSON: `/api/live`, `/api/live30/{id}`, `/api/odds/books`, `/api/odds/{fixture_id}` · `/health`.
 
-Without `GOAL_API_KEY` the UI still serves `/` and `/health` (alert / `goal_api_key_configured: false`). **Set `GOAL_API_KEY` in `.env` before expecting live fixtures.**
+Without `GOAL_API_KEY` the UI still serves `/`, `/odds`, and `/health` (alert / `goal_api_key_configured: false`). **Set `GOAL_API_KEY` in `.env` before expecting live fixtures.** Quote uses deterministic mock data until the odss live client is wired (`ODSS_API_KEY` optional; no live odds HTTP yet).
 
 ## CLI
 

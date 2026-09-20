@@ -28,9 +28,14 @@ from goal_xg.live30.service import (
     score_fixture_live30,
 )
 from goal_xg.model.weights import BASE_WEIGHTS, COMPONENT_LABELS_IT
+from goal_xg.odds.compare import OddsCompareService
+from goal_xg.odds.mock import list_sample_fixture_ids
+from goal_xg.odds.provider import provider_status
+from goal_xg.odds.registry import default_registry, registry_as_dicts
 
 _WEB_DIR = Path(__file__).resolve().parent
 _TEMPLATES = Jinja2Templates(directory=str(_WEB_DIR / "templates"))
+_ODDS_SERVICE = OddsCompareService()
 
 # Backward-compatible aliases for tests / older call sites.
 clear_schedule_cache = clear_today_schedule_cache
@@ -568,7 +573,7 @@ def _load_api_sports_dump_for_fixture(
 
 
 def create_app() -> FastAPI:
-    app = FastAPI(title="Goal xG", version="0.5.1", docs_url="/docs")
+    app = FastAPI(title="Goal xG", version="0.5.2", docs_url="/docs")
     app.mount("/static", StaticFiles(directory=str(_WEB_DIR / "static")), name="static")
 
     @app.get("/health")
@@ -583,6 +588,7 @@ def create_app() -> FastAPI:
             os.environ.get("API_SPORTS_KEY", "").strip()
             or os.environ.get("APISPORTS_KEY", "").strip()
         )
+        odss_key = bool(os.environ.get("ODSS_API_KEY", "").strip())
         daily_meta: dict[str, Any] | None = None
         try:
             from goal_xg.jobs.store import DailyStore
@@ -602,10 +608,12 @@ def create_app() -> FastAPI:
         return {
             "ok": True,
             "service": "goal-xg",
-            "version": "0.5.1",
+            "version": "0.5.2",
             "goal_api_key_configured": goal_key,
             "football_data_configured": fd_key,
             "api_sports_configured": api_sports_key,
+            "odss_api_key_configured": odss_key,
+            "odds_live_calls_enabled": False,
             "daily_refresh": daily_meta,
         }
 
@@ -668,6 +676,7 @@ def create_app() -> FastAPI:
                 "focus": focus,
                 "focus_reason": focus_reason(focus),
                 "refresh_seconds": 30,
+                "nav_active": "board",
             },
         )
 
@@ -823,6 +832,53 @@ def create_app() -> FastAPI:
             raise HTTPException(status_code=502, detail=str(exc)) from exc
         finally:
             client.close()
+
+    @app.get("/odds", response_class=HTMLResponse)
+    def odds_page(request: Request) -> HTMLResponse:
+        """Dedicated Quote section — mock 1X2 until odss client is wired."""
+        _load_env()
+        status = provider_status()
+        registry = default_registry()
+        book_names = {b.id: b.name for b in registry}
+        snapshots = [
+            _ODDS_SERVICE.compare(fid, use_cache=True)
+            for fid in list_sample_fixture_ids()
+        ]
+        return _TEMPLATES.TemplateResponse(
+            request,
+            "odds.html",
+            {
+                "nav_active": "odds",
+                "books": list(registry),
+                "book_names": book_names,
+                "snapshots": snapshots,
+                "api_connected": bool(status.get("live_calls_enabled")),
+                "provider_message": str(status.get("message") or "API non collegata"),
+                "refresh_seconds": None,
+            },
+        )
+
+    @app.get("/api/odds/books")
+    def api_odds_books() -> JSONResponse:
+        _load_env()
+        return JSONResponse(
+            {
+                "books": registry_as_dicts(),
+                "provider": provider_status(),
+            }
+        )
+
+    @app.get("/api/odds/{fixture_id}")
+    def api_odds_fixture(fixture_id: str) -> JSONResponse:
+        """Same-match 1X2 comparison — mock/structure JSON when no live key path."""
+        _load_env()
+        try:
+            snap = _ODDS_SERVICE.compare(fixture_id, use_cache=True)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        payload = snap.to_dict()
+        payload["provider"] = provider_status()
+        return JSONResponse(payload)
 
     return app
 

@@ -1,4 +1,4 @@
-"""HTTP / data clients — GOAL + API-Sports enrich + football-data.org coaches."""
+"""HTTP / data clients — GOAL + API-Sports enrich + football-data + odss stub."""
 
 from goal_xg.clients.api_sports import (
     BIG5_LEAGUE_IDS,
@@ -15,6 +15,12 @@ from goal_xg.clients.football_data import (
 )
 from goal_xg.clients.goal_api import BIG5_LEAGUE_CODES, GoalApiClient
 from goal_xg.clients.goal_ws import GoalWsClient
+from goal_xg.clients.odss import (
+    OdssClient,
+    OdssError,
+    maybe_client as maybe_odss_client,
+    odss_api_key_configured,
+)
 
 __all__ = [
     "GoalApiClient",
@@ -29,4 +35,8 @@ __all__ = [
     "BIG5_LEAGUE_CODES",
     "BIG5_COMPETITION_CODES",
     "BIG5_LEAGUE_IDS",
+    "OdssClient",
+    "OdssError",
+    "maybe_odss_client",
+    "odss_api_key_configured",
 ]

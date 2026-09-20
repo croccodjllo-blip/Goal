@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% block title %}Goal xG — Quote{% endblock %}
+{% block content %}
+<header class="board-head">
+  <div class="board-head-row">
+    <h1>Quote 1X2</h1>
+    <span class="board-pulse board-pulse--odds" aria-hidden="true">
+      <span class="board-pulse-dot"></span> Confronto
+    </span>
+  </div>
+  <p>Stesso match · Bet365 · Snai · Sisal — prezzi informativi, niente scommesse in-app.</p>
+</header>
+
+{% if not api_connected %}
+<div class="alert alert--muted" role="status">
+  <strong>API non collegata.</strong>
+  {{ provider_message }}
+  Imposta <code>ODSS_API_KEY</code> quando pronto; finché il client live non è cablato restano dati mock.
+</div>
+{% endif %}
+
+<section class="board-section" aria-labelledby="sec-books">
+  <p class="section-label" id="sec-books">Book abilitati</p>
+  <ul class="odds-book-list">
+    {% for b in books %}
+    <li class="odds-book-chip{% if not b.enabled %} is-off{% endif %}">
+      <span class="odds-book-name">{{ b.name }}</span>
+      {% if b.region_note %}<span class="odds-book-note">{{ b.region_note }}</span>{% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+</section>
+
+{% if snapshots %}
+<section class="board-section" aria-labelledby="sec-compare">
+  <p class="section-label" id="sec-compare"><span class="window-pill">1X2</span> Confronto mock</p>
+  {% for snap in snapshots %}
+  <article class="odds-card" id="fixture-{{ snap.fixture_id }}">
+    <header class="odds-card-head">
+      <div class="odds-match">
+        {% if snap.home_name and snap.away_name %}
+        <span class="odds-teams">{{ snap.home_name }} <span class="odds-vs">–</span> {{ snap.away_name }}</span>
+        {% else %}
+        <span class="odds-teams mono">{{ snap.fixture_id }}</span>
+        {% endif %}
+        {% if snap.league_code %}<span class="odds-league">{{ snap.league_code }}</span>{% endif %}
+      </div>
+      <a class="odds-api-link muted" href="/api/odds/{{ snap.fixture_id }}">JSON</a>
+    </header>
+    <div class="table-scroll" tabindex="0">
+      <table class="odds-table">
+        <thead>
+          <tr>
+            <th scope="col">Book</th>
+            <th scope="col">1</th>
+            <th scope="col">X</th>
+            <th scope="col">2</th>
+            <th scope="col">Agg.</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in snap.books %}
+          <tr>
+            <th scope="row">{{ book_names.get(row.book_id, row.book_id) }}</th>
+            <td class="{% if snap.best.HOME and snap.best.HOME.book_id == row.book_id %}is-best{% endif %}">
+              {{ "%.2f"|format(row.home) if row.home is not none else "—" }}
+            </td>
+            <td class="{% if snap.best.DRAW and snap.best.DRAW.book_id == row.book_id %}is-best{% endif %}">
+              {{ "%.2f"|format(row.draw) if row.draw is not none else "—" }}
+            </td>
+            <td class="{% if snap.best.AWAY and snap.best.AWAY.book_id == row.book_id %}is-best{% endif %}">
+              {{ "%.2f"|format(row.away) if row.away is not none else "—" }}
+            </td>
+            <td class="mono muted">
+              {% if row.last_updated %}{{ row.last_updated.strftime("%H:%M:%S") }} UTC{% else %}—{% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% if snap.best %}
+    <p class="odds-best-line muted">
+      Best:
+      {% if snap.best.HOME %}1 {{ "%.2f"|format(snap.best.HOME.price) }} ({{ book_names.get(snap.best.HOME.book_id, snap.best.HOME.book_id) }}){% endif %}
+      {% if snap.best.DRAW %} · X {{ "%.2f"|format(snap.best.DRAW.price) }} ({{ book_names.get(snap.best.DRAW.book_id, snap.best.DRAW.book_id) }}){% endif %}
+      {% if snap.best.AWAY %} · 2 {{ "%.2f"|format(snap.best.AWAY.price) }} ({{ book_names.get(snap.best.AWAY.book_id, snap.best.AWAY.book_id) }}){% endif %}
+    </p>
+    {% endif %}
+  </article>
+  {% endfor %}
+</section>
+{% else %}
+<p class="empty">Nessuna quota disponibile (stato vuoto).</p>
+{% endif %}
+
+<p class="api-link muted">
+  <a href="/api/odds/books">GET /api/odds/books</a>
+  ·
+  <a href="/api/odds/demo-sa-1">GET /api/odds/{fixture_id}</a>
+</p>
+{% endblock %}
